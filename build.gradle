@@ -70,14 +70,14 @@ configurations {
 }
 
 dependencies {
-    // Building Gadgets 2 (optional, from CurseMaven - project 298187, file 6850515 = v1.3.9 for 1.21.1)
-    compileOnly "curse.maven:building-gadgets-298187:6850515"
+    // Building Gadgets 2 (optional at runtime, from CurseMaven - project 298187, file 6850515 = v1.3.9 for 1.21.1)
+    implementation "curse.maven:building-gadgets-298187:6850515"
 
     // Curios API - required by BG2 at runtime (project 309927, file 6529130 = v9.5.1+1.21.1)
-    compileOnly "curse.maven:curios-309927:6529130"
+    implementation "curse.maven:curios-309927:6529130"
 
-    // Create mod (optional, from CurseMaven - file 7178775 = v6.0.8 for 1.21.1)
-    compileOnly "curse.maven:create-328085:7178775"
+    // Create mod (optional at runtime, from CurseMaven - file 7178775 = v6.0.8 for 1.21.1)
+    implementation "curse.maven:create-328085:7178775"
 
     // Gson is bundled with MC, declared for clarity
     compileOnly 'com.google.code.gson:gson:2.10.1'
