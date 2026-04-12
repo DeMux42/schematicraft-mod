@@ -1,0 +1,15 @@
+{
+  "key.schematicraft.category": "Schematicraft",
+  "key.schematicraft.open_schematicraft": "Open Schematicraft",
+  "key.schematicraft.open_api_key": "API Key Settings",
+
+  "screen.schematicraft.main.title": "Schematicraft",
+  "screen.schematicraft.tab.library": "My Library",
+  "screen.schematicraft.tab.search": "Search",
+
+  "screen.schematicraft.api_key.title": "Schematicraft API Key",
+  "screen.schematicraft.api_key.field": "API Key",
+  "screen.schematicraft.api_key.instructions": "Get your key at schematicraft.com/account",
+  "screen.schematicraft.api_key.validate": "Connect",
+  "screen.schematicraft.api_key.cancel": "Cancel"
+}
