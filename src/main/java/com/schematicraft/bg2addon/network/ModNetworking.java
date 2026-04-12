@@ -8,7 +8,6 @@ import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 import org.slf4j.Logger;
 
-@EventBusSubscriber(bus = EventBusSubscriber.Bus.MOD, modid = SchematiCraftMod.MODID)
 public class ModNetworking {
     private static final Logger LOGGER = LogUtils.getLogger();
 

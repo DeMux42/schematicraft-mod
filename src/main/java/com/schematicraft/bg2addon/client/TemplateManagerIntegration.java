@@ -69,7 +69,6 @@ import java.util.UUID;
  * finishes rendering), then re-render our widgets (lists, buttons, search field)
  * on top of those backgrounds.
  */
-@EventBusSubscriber(value = Dist.CLIENT, bus = EventBusSubscriber.Bus.GAME, modid = SchematiCraftMod.MODID)
 public class TemplateManagerIntegration {
     private static final Logger LOGGER = LogUtils.getLogger();
     private static final int PANEL_W = 160;

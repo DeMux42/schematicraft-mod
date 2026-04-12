@@ -32,7 +32,6 @@ import org.slf4j.Logger;
  *   to use the Template Manager block for Schematicraft features, because loading
  *   templates into the gadget requires server-side mod support (see BG2GadgetHelper).
  */
-@EventBusSubscriber(value = Dist.CLIENT, bus = EventBusSubscriber.Bus.GAME, modid = SchematiCraftMod.MODID)
 public class ScreenInterceptor {
     private static final Logger LOGGER = LogUtils.getLogger();
     private static boolean fallbackMessageShown = false;

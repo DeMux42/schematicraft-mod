@@ -35,7 +35,6 @@ import java.util.List;
  *
  * Purely client-side. No custom packets, no server mod required.
  */
-@EventBusSubscriber(value = Dist.CLIENT, bus = EventBusSubscriber.Bus.GAME, modid = SchematiCraftMod.MODID)
 public class SchematicTableIntegration {
 	private static final Logger LOGGER = LogUtils.getLogger();
 	private static final int PANEL_W = 160;
