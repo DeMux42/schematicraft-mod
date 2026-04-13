@@ -17,6 +17,7 @@ public class ModConfig {
     private static final String CONFIG_FILE = "config/schematicraft.properties";
     private static String apiKey = "";
     private static String serverUrl = "https://schematicraft.com";
+    private static String pinnedBundles = "";
 
     public static void init() {
         load();
@@ -39,6 +40,13 @@ public class ModConfig {
         return !apiKey.isEmpty() && apiKey.startsWith("sk_");
     }
 
+    public static String getPinnedBundles() { return pinnedBundles; }
+
+    public static void setPinnedBundles(String value) {
+        pinnedBundles = value != null ? value : "";
+        save();
+    }
+
     private static void load() {
         Path path = Path.of(CONFIG_FILE);
         if (!Files.exists(path)) return;
@@ -48,6 +56,7 @@ public class ModConfig {
             props.load(Files.newBufferedReader(path));
             apiKey = props.getProperty("api_key", "");
             serverUrl = props.getProperty("server_url", "https://schematicraft.com");
+            pinnedBundles = props.getProperty("pinned_bundles", "");
         } catch (IOException e) {
             LOGGER.warn("Failed to load config: {}", e.getMessage());
         }
@@ -60,6 +69,7 @@ public class ModConfig {
             Properties props = new Properties();
             props.setProperty("api_key", apiKey);
             props.setProperty("server_url", serverUrl);
+            props.setProperty("pinned_bundles", pinnedBundles);
             props.store(Files.newBufferedWriter(path), "Schematicraft Config");
         } catch (IOException e) {
             LOGGER.warn("Failed to save config: {}", e.getMessage());

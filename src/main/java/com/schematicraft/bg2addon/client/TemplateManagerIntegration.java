@@ -1,7 +1,5 @@
 package com.schematicraft.bg2addon.client;
-import com.schematicraft.lib.core.ApiJsonParser;
 import com.schematicraft.lib.core.SchematicEntry;
-import com.schematicraft.lib.core.BundleEntry;
 
 import com.direwolf20.buildinggadgets2.client.screen.TemplateManagerGUI;
 import com.direwolf20.buildinggadgets2.common.items.GadgetCopyPaste;
@@ -20,7 +18,6 @@ import com.schematicraft.lib.network.ServerMode;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.TagParser;
 import net.minecraft.network.chat.Component;
@@ -71,20 +68,15 @@ import java.util.UUID;
  */
 public class TemplateManagerIntegration {
     private static final Logger LOGGER = LogUtils.getLogger();
-    private static final int PANEL_W = 160;
+    private static final int PANEL_W = 170;
 
-    private static enum LeftTab { LIBRARY, SEARCH }
-    private static LeftTab leftTab = LeftTab.LIBRARY;
-    private static SchematicListWidget leftList;
-    private static EditBox searchField;
-    private static boolean searchLoading = false;
-    private static String pendingSearch = null;
-    private static long lastSearchTime = 0;
+    // Left panel: shared PalettePanel (replaces old Library/Search tabs)
+    private static com.schematicraft.lib.client.screen.PalettePanel palettePanel;
 
+    // Right panel: clipboard (BG2-specific)
     private static SchematicListWidget clipboardList;
     private static String statusText = "";
     private static boolean lastGadgetState = false;
-    private static Button libButton, srchButton, headerButton, logoutButton;
     private static ClipboardEntry hoveredClipboardEntry = null;
 
     @SubscribeEvent
@@ -93,29 +85,24 @@ public class TemplateManagerIntegration {
 
         Minecraft mc = Minecraft.getInstance();
         statusText = "";
-        leftList = null;
+        palettePanel = null;
         clipboardList = null;
-        searchField = null;
 
         if (ServerMode.isDirectModeAvailable()) {
-            // Server mode: no panels needed, just a hint rendered in Render.Post
             return;
         }
 
-        // Client-only mode: inject full panels
         if (!ModConfig.hasApiKey()) {
             initNoKeyWidgets(event, gui, mc);
             return;
         }
 
-        initLeftPanel(event, gui, mc);
-        initRightPanel(event, gui, mc);
+        // Left panel: PalettePanel with always-on filter, pinned bundle tabs
+        palettePanel = new com.schematicraft.lib.client.screen.PalettePanel(
+                TemplateManagerIntegration::onSchematicClicked);
+        palettePanel.init(event, gui);
 
-        SchematiCraftState state = SchematiCraftState.get();
-        if (!state.isLibraryLoaded() && !state.isLibraryLoading()) {
-            SchematiCraftAPIWrapper.get().loadLibrary().thenRun(() ->
-                    mc.execute(TemplateManagerIntegration::rebuildLeftList));
-        }
+        initRightPanel(event, gui, mc);
     }
 
     private static void initNoKeyWidgets(ScreenEvent.Init.Post event, TemplateManagerGUI gui, Minecraft mc) {
@@ -127,57 +114,6 @@ public class TemplateManagerIntegration {
         event.addListener(Button.builder(Component.literal("\u00a79Get key at schematicraft.com"),
                 b -> net.minecraft.Util.getPlatform().openUri("https://www.schematicraft.com/account#ingame-api-keys"))
                 .bounds(leftX, y + 20, PANEL_W, 16).build());
-    }
-
-    private static void initLeftPanel(ScreenEvent.Init.Post event, TemplateManagerGUI gui, Minecraft mc) {
-        int leftX = 4;
-        int y = 10;
-
-        // Header: clickable "Schematicraft" link + logout button
-        headerButton = Button.builder(Component.literal("\u00a7b\u2601 Schematicraft"),
-                b -> net.minecraft.Util.getPlatform().openUri("https://www.schematicraft.com"))
-                .bounds(leftX, y, PANEL_W - 14, 12).build();
-        event.addListener(headerButton);
-
-        logoutButton = Button.builder(Component.literal("\u00a7c\u2716"),
-                b -> { ModConfig.setApiKey(""); mc.setScreen(gui); })
-                .bounds(leftX + PANEL_W - 12, y, 12, 12).build();
-        event.addListener(logoutButton);
-        y += 14;
-
-        // Library / Search tabs
-        Button libBtn = Button.builder(Component.literal("Library"),
-                b -> { leftTab = LeftTab.LIBRARY; mc.setScreen(gui); })
-                .bounds(leftX, y, PANEL_W / 2 - 1, 14).build();
-        Button srchBtn = Button.builder(Component.literal("Search"),
-                b -> { leftTab = LeftTab.SEARCH; mc.setScreen(gui); })
-                .bounds(leftX + PANEL_W / 2 + 1, y, PANEL_W / 2 - 1, 14).build();
-        libBtn.active = leftTab != LeftTab.LIBRARY;
-        srchBtn.active = leftTab != LeftTab.SEARCH;
-        libButton = libBtn;
-        srchButton = srchBtn;
-        event.addListener(libBtn);
-        event.addListener(srchBtn);
-        y += 16;
-
-        if (leftTab == LeftTab.SEARCH) {
-            searchField = new EditBox(mc.font, leftX, y, PANEL_W, 14, Component.literal(""));
-            searchField.setHint(Component.literal("Search schematics..."));
-            searchField.setMaxLength(100);
-            searchField.setResponder(t -> {
-                if (t.length() < 2) { rebuildLeftList(); return; }
-                pendingSearch = t;
-                lastSearchTime = System.currentTimeMillis();
-            });
-            event.addListener(searchField);
-            y += 16;
-        }
-
-        int listH = gui.height - y - 16;
-        leftList = new SchematicListWidget(mc, PANEL_W, listH, y, leftX,
-                TemplateManagerIntegration::onSchematicClicked);
-        event.addListener(leftList);
-        rebuildLeftList();
     }
 
     private static void initRightPanel(ScreenEvent.Init.Post event, TemplateManagerGUI gui, Minecraft mc) {
@@ -197,14 +133,12 @@ public class TemplateManagerIntegration {
     @SubscribeEvent
     public static void onKeyPressed(ScreenEvent.KeyPressed.Pre event) {
         if (!(event.getScreen() instanceof TemplateManagerGUI)) return;
-        if (searchField != null && searchField.isFocused()) {
-            // Suppress inventory close key (E) and other game keys while typing
+        if (palettePanel != null && palettePanel.getFilterField() != null && palettePanel.getFilterField().isFocused()) {
             int key = event.getKeyCode();
-            // Let Esc (256) and Enter (257) through, block everything else that isn't a text key
-            if (key != 256 && key != 257) {
-                // Forward to the search field and consume the event
-                searchField.keyPressed(event.getKeyCode(), event.getScanCode(), event.getModifiers());
-                event.setCanceled(true);
+            if (key != 256) { // Let Esc through
+                if (palettePanel.onKeyPressed(key, event.getScanCode(), event.getModifiers())) {
+                    event.setCanceled(true);
+                }
             }
         }
     }
@@ -212,8 +146,7 @@ public class TemplateManagerIntegration {
     @SubscribeEvent
     public static void onCharTyped(ScreenEvent.CharacterTyped.Pre event) {
         if (!(event.getScreen() instanceof TemplateManagerGUI)) return;
-        if (searchField != null && searchField.isFocused()) {
-            searchField.charTyped(event.getCodePoint(), event.getModifiers());
+        if (palettePanel != null && palettePanel.onCharTyped(event.getCodePoint(), event.getModifiers())) {
             event.setCanceled(true);
         }
     }
@@ -259,13 +192,16 @@ public class TemplateManagerIntegration {
         }
 
         // Panel backgrounds (drawn on top of the container background)
-        g.fill(0, 6, PANEL_W + 8, gui.height - 6, 0xD0080808);
-        g.fill(PANEL_W + 8, 6, PANEL_W + 9, gui.height - 6, 0x40FFFFFF);
         g.fill(rightX - 5, 6, gui.width, gui.height - 6, 0xD0080808);
         g.fill(rightX - 6, 6, rightX - 5, gui.height - 6, 0x40FFFFFF);
 
-        // Left header underline
-        g.fill(4, 20, 4 + PANEL_W, 21, 0x30FFFFFF);
+        // Left panel: PalettePanel handles its own background and widget rendering
+        int mx = event.getMouseX();
+        int my = event.getMouseY();
+        float pt = event.getPartialTick();
+        if (palettePanel != null) {
+            palettePanel.render(g, gui, mx, my, pt);
+        }
 
         // Right header
         g.drawString(mc.font, "\u00a7a\u2702 Clipboard", rightX, 12, 0xFFAAFFAA);
@@ -276,17 +212,8 @@ public class TemplateManagerIntegration {
             g.drawCenteredString(mc.font, statusText, gui.width / 2, gui.height - 14, 0xCCCCCC);
         }
 
-        // Re-render lists on top of panel backgrounds (they were drawn under the container bg)
-        int mx = event.getMouseX();
-        int my = event.getMouseY();
-        float pt = event.getPartialTick();
-        if (leftList != null) leftList.render(g, mx, my, pt);
+        // Re-render right panel widgets on top of backgrounds
         if (clipboardList != null) clipboardList.render(g, mx, my, pt);
-        if (searchField != null) searchField.render(g, mx, my, pt);
-        if (libButton != null) libButton.render(g, mx, my, pt);
-        if (srchButton != null) srchButton.render(g, mx, my, pt);
-        if (headerButton != null) headerButton.render(g, mx, my, pt);
-        if (logoutButton != null) logoutButton.render(g, mx, my, pt);
 
         // Clipboard 3D preview (bottom half of right panel)
         if (clipboardList != null && lastGadgetState) {
@@ -338,8 +265,8 @@ public class TemplateManagerIntegration {
 
             // Our panels (client-only mode)
             if (!ServerMode.isDirectModeAvailable()) {
-                if (leftList != null) {
-                    for (var child : leftList.children()) {
+                if (palettePanel != null && palettePanel.getListWidget() != null) {
+                    for (var child : palettePanel.getListWidget().children()) {
                         if (child instanceof SchematicListWidget.SchematicEntry && child.isMouseOver(mx, my)) {
                             hoveringOurPanels = true; break;
                         }
@@ -373,32 +300,6 @@ public class TemplateManagerIntegration {
             }
         }
 
-        // Search debounce
-        if (pendingSearch != null && System.currentTimeMillis() - lastSearchTime > 500) {
-            String q = pendingSearch;
-            pendingSearch = null;
-            searchLoading = true;
-            rebuildLeftList();
-            SchematiCraftAPIWrapper.get().search(q).thenAccept(json -> {
-                mc.execute(() -> {
-                    searchLoading = false;
-                    var results = ApiJsonParser.parseSearch(json);
-                    if (leftList != null) {
-                        leftList.clearEntries();
-                        for (var r : results) {
-                            SchematicEntry s = r.schematic();
-                            leftList.addEntry(new SchematicListWidget.SchematicEntry(leftList, s.id(),
-                                    s.title() != null ? s.title() : "Untitled",
-                                    s.ownerName() != null ? s.ownerName() : "",
-                                    s.thumbnailUrl()));
-                        }
-                        if (results.isEmpty())
-                            leftList.addEntry(new SchematicListWidget.MessageEntry(leftList, "No results"));
-                    }
-                });
-            });
-        }
-
         // Refresh clipboard when gadget state changes
         boolean hasGadget = hasInsertedCopyPasteGadget(gui);
         if (hasGadget != lastGadgetState) {
@@ -413,46 +314,6 @@ public class TemplateManagerIntegration {
         ItemStack slotStack = container.slots.get(0).getItem();
         return slotStack.getItem() instanceof GadgetCopyPaste
                 || slotStack.getItem() instanceof GadgetCutPaste;
-    }
-
-    private static void rebuildLeftList() {
-        if (leftList == null) return;
-        leftList.clearEntries();
-        SchematiCraftState state = SchematiCraftState.get();
-
-        if (leftTab == LeftTab.LIBRARY) {
-            if (state.isLibraryLoading()) {
-                leftList.addEntry(new SchematicListWidget.MessageEntry(leftList, "Loading..."));
-                return;
-            }
-            if (state.getLibraryError() != null) {
-                leftList.addEntry(new SchematicListWidget.MessageEntry(leftList, state.getLibraryError()));
-                return;
-            }
-            for (BundleEntry b : state.getBundles()) {
-                leftList.addEntry(new SchematicListWidget.HeaderEntry(leftList, "\u00a7e" + b.name()));
-                for (SchematicEntry s : b.schematics()) {
-                    leftList.addEntry(new SchematicListWidget.SchematicEntry(leftList, s.id(),
-                            s.title() != null ? s.title() : "Untitled", "", s.thumbnailUrl()));
-                }
-            }
-            if (!state.getUnbundled().isEmpty()) {
-                leftList.addEntry(new SchematicListWidget.HeaderEntry(leftList, "\u00a77Unbundled"));
-                for (SchematicEntry s : state.getUnbundled()) {
-                    leftList.addEntry(new SchematicListWidget.SchematicEntry(leftList, s.id(),
-                            s.title() != null ? s.title() : "Untitled", "", s.thumbnailUrl()));
-                }
-            }
-            if (state.getBundles().isEmpty() && state.getUnbundled().isEmpty()) {
-                leftList.addEntry(new SchematicListWidget.MessageEntry(leftList, "Library empty"));
-            }
-        } else {
-            if (searchLoading) {
-                leftList.addEntry(new SchematicListWidget.MessageEntry(leftList, "Searching..."));
-            } else if (searchField != null && searchField.getValue().length() < 2) {
-                leftList.addEntry(new SchematicListWidget.MessageEntry(leftList, "Type to search..."));
-            }
-        }
     }
 
     private static void rebuildClipboardList(boolean hasGadget) {
