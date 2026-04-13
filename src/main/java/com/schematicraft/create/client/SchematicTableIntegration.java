@@ -242,6 +242,21 @@ public class SchematicTableIntegration {
 	}
 
 	@SubscribeEvent
+	public static void onMouseClicked(ScreenEvent.MouseButtonPressed.Pre event) {
+		if (!(event.getScreen() instanceof SchematicTableScreen)) return;
+		// Forward right-clicks in our panel area to the palette list
+		if (event.getButton() == 1 && palettePanel != null && palettePanel.getListWidget() != null) {
+			double mx = event.getMouseX();
+			double my = event.getMouseY();
+			if (palettePanel.getListWidget().isMouseOver(mx, my)) {
+				if (palettePanel.getListWidget().mouseClicked(mx, my, 1)) {
+					event.setCanceled(true);
+				}
+			}
+		}
+	}
+
+	@SubscribeEvent
 	public static void onKeyPressed(ScreenEvent.KeyPressed.Pre event) {
 		if (!(event.getScreen() instanceof SchematicTableScreen)) return;
 		// Check upload form fields first
