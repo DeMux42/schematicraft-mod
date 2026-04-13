@@ -43,6 +43,18 @@ public class SchematicListWidget extends ObjectSelectionList<SchematicListWidget
         return this.listLeft + this.width - 6;
     }
 
+    @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        // Forward right-clicks to entries (base class only handles left-click)
+        if (button == 1) {
+            var entry = this.getEntryAtPosition(mouseX, mouseY);
+            if (entry != null) {
+                return entry.mouseClicked(mouseX, mouseY, button);
+            }
+        }
+        return super.mouseClicked(mouseX, mouseY, button);
+    }
+
     public static abstract class BaseEntry extends ObjectSelectionList.Entry<BaseEntry> {
         protected final SchematicListWidget parent;
 
