@@ -37,16 +37,10 @@ import java.util.List;
  */
 public class SchematicTableIntegration {
 	private static final Logger LOGGER = LogUtils.getLogger();
-	private static final int PANEL_W = 160;
+	private static final int PANEL_W = 170;
 
-	// Right panel: cloud library
-	private enum RightTab { LIBRARY, SEARCH }
-	private static RightTab rightTab = RightTab.LIBRARY;
-	private static SchematicListWidget rightList;
-	private static EditBox searchField;
-	private static boolean searchLoading = false;
-	private static String pendingSearch = null;
-	private static long lastSearchTime = 0;
+	// Right panel: PalettePanel (replaces old Library/Search tabs)
+	private static com.schematicraft.lib.client.screen.PalettePanel palettePanel;
 
 	// Left panel: local schematics + upload
 	private static SchematicListWidget leftList;
@@ -60,7 +54,7 @@ public class SchematicTableIntegration {
 	// Shared
 	private static String statusText = "";
 	private static long statusClearAt = 0;
-	private static Button headerBtn, logoutBtn, libBtn, srchBtn, bundleBtn;
+	private static Button bundleBtn;
 
 	@SubscribeEvent
 	public static void onScreenInit(ScreenEvent.Init.Post event) {
@@ -68,9 +62,8 @@ public class SchematicTableIntegration {
 
 		Minecraft mc = Minecraft.getInstance();
 		statusText = "";
-		rightList = null;
+		palettePanel = null;
 		leftList = null;
-		searchField = null;
 		uploadTitle = null;
 		uploadDesc = null;
 
@@ -85,61 +78,13 @@ public class SchematicTableIntegration {
 			return;
 		}
 
-		initRightPanel(event, screen, mc);
+		// Right panel: PalettePanel for cloud library
+		palettePanel = new com.schematicraft.lib.client.screen.PalettePanel(
+				SchematicTableIntegration::onCloudSchematicClicked,
+				com.schematicraft.lib.client.screen.PalettePanel.Side.RIGHT);
+		palettePanel.init(event, screen);
+
 		initLeftPanel(event, screen, mc);
-
-		LibraryState state = LibraryState.get();
-		if (!state.isLibraryLoaded() && !state.isLibraryLoading()) {
-			SchematiCraftAPIWrapper.get().loadLibrary().thenRun(() ->
-				mc.execute(SchematicTableIntegration::rebuildRightList));
-		}
-	}
-
-	private static void initRightPanel(ScreenEvent.Init.Post event, SchematicTableScreen screen, Minecraft mc) {
-		int rightX = screen.width - PANEL_W - 6;
-		int y = 10;
-
-		headerBtn = Button.builder(Component.literal("\u00a7b\u2601 Schematicraft"),
-			b -> net.minecraft.Util.getPlatform().openUri("https://www.schematicraft.com"))
-			.bounds(rightX, y, PANEL_W - 14, 12).build();
-		event.addListener(headerBtn);
-
-		logoutBtn = Button.builder(Component.literal("\u00a7c\u2716"),
-			b -> { ModConfig.setApiKey(""); mc.setScreen(screen); })
-			.bounds(rightX + PANEL_W - 12, y, 12, 12).build();
-		event.addListener(logoutBtn);
-		y += 14;
-
-		libBtn = Button.builder(Component.literal("Library"),
-			b -> { rightTab = RightTab.LIBRARY; mc.setScreen(screen); })
-			.bounds(rightX, y, PANEL_W / 2 - 1, 14).build();
-		srchBtn = Button.builder(Component.literal("Search"),
-			b -> { rightTab = RightTab.SEARCH; mc.setScreen(screen); })
-			.bounds(rightX + PANEL_W / 2 + 1, y, PANEL_W / 2 - 1, 14).build();
-		libBtn.active = rightTab != RightTab.LIBRARY;
-		srchBtn.active = rightTab != RightTab.SEARCH;
-		event.addListener(libBtn);
-		event.addListener(srchBtn);
-		y += 16;
-
-		if (rightTab == RightTab.SEARCH) {
-			searchField = new EditBox(mc.font, rightX, y, PANEL_W, 14, Component.literal(""));
-			searchField.setHint(Component.literal("Search schematics..."));
-			searchField.setMaxLength(100);
-			searchField.setResponder(t -> {
-				if (t.length() < 2) { rebuildRightList(); return; }
-				pendingSearch = t;
-				lastSearchTime = System.currentTimeMillis();
-			});
-			event.addListener(searchField);
-			y += 16;
-		}
-
-		int listH = screen.height - y - 16;
-		rightList = new SchematicListWidget(mc, PANEL_W, listH, y, rightX,
-			SchematicTableIntegration::onCloudSchematicClicked);
-		event.addListener(rightList);
-		rebuildRightList();
 	}
 
 	private static void initLeftPanel(ScreenEvent.Init.Post event, SchematicTableScreen screen, Minecraft mc) {
@@ -264,7 +209,12 @@ public class SchematicTableIntegration {
 					: "\u00a7aUploaded!";
 				statusClearAt = System.currentTimeMillis() + 3000;
 				SchematiCraftAPIWrapper.get().refreshLibrary().thenRun(() ->
-					Minecraft.getInstance().execute(SchematicTableIntegration::rebuildRightList));
+					Minecraft.getInstance().execute(() -> {
+						if (palettePanel != null) {
+							com.schematicraft.lib.core.PaletteState.get().refilter();
+							palettePanel.rebuildList();
+						}
+					}));
 			});
 		}).exceptionally(ex -> {
 			Minecraft.getInstance().execute(() -> {
@@ -280,8 +230,8 @@ public class SchematicTableIntegration {
 	@SubscribeEvent
 	public static void onKeyPressed(ScreenEvent.KeyPressed.Pre event) {
 		if (!(event.getScreen() instanceof SchematicTableScreen)) return;
+		// Check upload form fields first
 		EditBox focused = null;
-		if (searchField != null && searchField.isFocused()) focused = searchField;
 		if (uploadTitle != null && uploadTitle.isFocused()) focused = uploadTitle;
 		if (uploadDesc != null && uploadDesc.isFocused()) focused = uploadDesc;
 		if (focused != null) {
@@ -290,6 +240,16 @@ public class SchematicTableIntegration {
 				focused.keyPressed(key, event.getScanCode(), event.getModifiers());
 				event.setCanceled(true);
 			}
+			return;
+		}
+		// Delegate to palette panel
+		if (palettePanel != null && palettePanel.getFilterField() != null && palettePanel.getFilterField().isFocused()) {
+			int key = event.getKeyCode();
+			if (key != 256) {
+				if (palettePanel.onKeyPressed(key, event.getScanCode(), event.getModifiers())) {
+					event.setCanceled(true);
+				}
+			}
 		}
 	}
 
@@ -297,11 +257,14 @@ public class SchematicTableIntegration {
 	public static void onCharTyped(ScreenEvent.CharacterTyped.Pre event) {
 		if (!(event.getScreen() instanceof SchematicTableScreen)) return;
 		EditBox focused = null;
-		if (searchField != null && searchField.isFocused()) focused = searchField;
 		if (uploadTitle != null && uploadTitle.isFocused()) focused = uploadTitle;
 		if (uploadDesc != null && uploadDesc.isFocused()) focused = uploadDesc;
 		if (focused != null) {
 			focused.charTyped(event.getCodePoint(), event.getModifiers());
+			event.setCanceled(true);
+			return;
+		}
+		if (palettePanel != null && palettePanel.onCharTyped(event.getCodePoint(), event.getModifiers())) {
 			event.setCanceled(true);
 		}
 	}
@@ -314,15 +277,14 @@ public class SchematicTableIntegration {
 		Minecraft mc = Minecraft.getInstance();
 		GuiGraphics g = event.getGuiGraphics();
 		int leftX = 4;
-		int rightX = screen.width - PANEL_W - 6;
 		int mx = event.getMouseX();
 		int my = event.getMouseY();
 		float pt = event.getPartialTick();
 
-		// Right panel background
-		g.fill(rightX - 4, 6, screen.width, screen.height - 6, 0xD0080808);
-		g.fill(rightX - 5, 6, rightX - 4, screen.height - 6, 0x40FFFFFF);
-		g.fill(rightX, 20, rightX + PANEL_W, 21, 0x30FFFFFF);
+		// Right panel: PalettePanel handles its own background and rendering
+		if (palettePanel != null) {
+			palettePanel.render(g, screen, mx, my, pt);
+		}
 
 		// Left panel background
 		g.fill(0, 6, PANEL_W + 8, screen.height - 6, 0xD0080808);
@@ -335,16 +297,10 @@ public class SchematicTableIntegration {
 		}
 		g.fill(leftX, 20, leftX + PANEL_W, 21, 0x30FFFFFF);
 
-		// Re-render all widgets on top
-		if (rightList != null) rightList.render(g, mx, my, pt);
+		// Re-render left panel widgets on top
 		if (leftList != null) leftList.render(g, mx, my, pt);
-		if (searchField != null) searchField.render(g, mx, my, pt);
 		if (uploadTitle != null) uploadTitle.render(g, mx, my, pt);
 		if (uploadDesc != null) uploadDesc.render(g, mx, my, pt);
-		if (headerBtn != null) headerBtn.render(g, mx, my, pt);
-		if (logoutBtn != null) logoutBtn.render(g, mx, my, pt);
-		if (libBtn != null) libBtn.render(g, mx, my, pt);
-		if (srchBtn != null) srchBtn.render(g, mx, my, pt);
 		if (bundleBtn != null) bundleBtn.render(g, mx, my, pt);
 
 		// Status text
@@ -354,72 +310,6 @@ public class SchematicTableIntegration {
 		}
 		if (!statusText.isEmpty()) {
 			g.drawCenteredString(mc.font, statusText, screen.width / 2, screen.height - 14, 0xCCCCCC);
-		}
-
-		// Search debounce
-		if (pendingSearch != null && System.currentTimeMillis() - lastSearchTime > 500) {
-			String q = pendingSearch;
-			pendingSearch = null;
-			searchLoading = true;
-			rebuildRightList();
-			SchematiCraftAPIWrapper.get().search(q).thenAccept(json -> {
-				mc.execute(() -> {
-					searchLoading = false;
-					var results = ApiJsonParser.parseSearch(json);
-					if (rightList != null) {
-						rightList.clearEntries();
-						for (var r : results) {
-							SchematicEntry s = r.schematic();
-							rightList.addEntry(new SchematicListWidget.SchematicEntry(rightList, s.id(),
-								s.title() != null ? s.title() : "Untitled",
-								s.ownerName() != null ? s.ownerName() : "",
-								s.thumbnailUrl()));
-						}
-						if (results.isEmpty())
-							rightList.addEntry(new SchematicListWidget.MessageEntry(rightList, "No results"));
-					}
-				});
-			});
-		}
-	}
-
-	private static void rebuildRightList() {
-		if (rightList == null) return;
-		rightList.clearEntries();
-		LibraryState state = LibraryState.get();
-
-		if (rightTab == RightTab.LIBRARY) {
-			if (state.isLibraryLoading()) {
-				rightList.addEntry(new SchematicListWidget.MessageEntry(rightList, "Loading..."));
-				return;
-			}
-			if (state.getLibraryError() != null) {
-				rightList.addEntry(new SchematicListWidget.MessageEntry(rightList, state.getLibraryError()));
-				return;
-			}
-			for (BundleEntry b : state.getBundles()) {
-				rightList.addEntry(new SchematicListWidget.HeaderEntry(rightList, "\u00a7e" + b.name()));
-				for (SchematicEntry s : b.schematics()) {
-					rightList.addEntry(new SchematicListWidget.SchematicEntry(rightList, s.id(),
-						s.title() != null ? s.title() : "Untitled", "", s.thumbnailUrl()));
-				}
-			}
-			if (!state.getUnbundled().isEmpty()) {
-				rightList.addEntry(new SchematicListWidget.HeaderEntry(rightList, "\u00a77Unbundled"));
-				for (SchematicEntry s : state.getUnbundled()) {
-					rightList.addEntry(new SchematicListWidget.SchematicEntry(rightList, s.id(),
-						s.title() != null ? s.title() : "Untitled", "", s.thumbnailUrl()));
-				}
-			}
-			if (state.getBundles().isEmpty() && state.getUnbundled().isEmpty()) {
-				rightList.addEntry(new SchematicListWidget.MessageEntry(rightList, "Library empty"));
-			}
-		} else {
-			if (searchLoading) {
-				rightList.addEntry(new SchematicListWidget.MessageEntry(rightList, "Searching..."));
-			} else if (searchField != null && searchField.getValue().length() < 2) {
-				rightList.addEntry(new SchematicListWidget.MessageEntry(rightList, "Type to search..."));
-			}
 		}
 	}
 
