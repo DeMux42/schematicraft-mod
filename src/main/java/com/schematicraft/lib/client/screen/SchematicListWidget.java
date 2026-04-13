@@ -177,22 +177,30 @@ public class SchematicListWidget extends ObjectSelectionList<SchematicListWidget
             Minecraft mc = Minecraft.getInstance();
             graphics.drawString(mc.font, text, left + 3, top + 7, 0xFFAA00);
             graphics.fill(left + 3, top + height - 1, left + width - 3, top + height, 0x20FFAA00);
-            // Right-click hint on hover
             if (hovered && bundleId != null) {
-                graphics.drawString(mc.font, "\u00a78R-click: pin", left + width - 60, top + 7, 0x555555);
+                com.schematicraft.lib.core.PaletteState state = com.schematicraft.lib.core.PaletteState.get();
+                String hint = state.isBundlePinned(bundleId) ? "\u00a7cR: unpin" : "\u00a7aR: pin";
+                int hintW = mc.font.width(hint);
+                graphics.drawString(mc.font, hint, left + width - hintW - 2, top + 7, 0x555555);
             }
         }
 
         @Override
         public boolean mouseClicked(double mouseX, double mouseY, int button) {
             if (button == 1 && bundleId != null) {
-                // Right-click: pin this bundle
                 com.schematicraft.lib.core.PaletteState state = com.schematicraft.lib.core.PaletteState.get();
-                int slot = state.getFirstEmptySlot();
-                if (slot >= 0) {
-                    state.pinBundle(slot, bundleId, bundleName);
-                    com.schematicraft.lib.config.ModConfig.setPinnedBundles(state.savePinnedToConfig());
+                int existingSlot = state.getSlotForBundle(bundleId);
+                if (existingSlot >= 0) {
+                    // Already pinned: unpin it
+                    state.unpinBundle(existingSlot);
+                } else {
+                    // Not pinned: pin to next empty slot
+                    int slot = state.getFirstEmptySlot();
+                    if (slot >= 0) {
+                        state.pinBundle(slot, bundleId, bundleName);
+                    }
                 }
+                com.schematicraft.lib.config.ModConfig.setPinnedBundles(state.savePinnedToConfig());
                 return true;
             }
             return false;

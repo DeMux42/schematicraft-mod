@@ -64,6 +64,10 @@ public class PaletteState {
 
     public void pinBundle(int slot, String bundleId, String bundleName) {
         if (slot < 0 || slot >= MAX_PINNED_SLOTS) return;
+        // Don't allow the same bundle on multiple slots
+        for (int i = 0; i < MAX_PINNED_SLOTS; i++) {
+            if (bundleId.equals(pinnedBundleIds[i])) return;
+        }
         pinnedBundleIds[slot] = bundleId;
         pinnedBundleNames[slot] = bundleName;
     }
@@ -73,6 +77,28 @@ public class PaletteState {
         pinnedBundleIds[slot] = null;
         pinnedBundleNames[slot] = null;
         if (activeTab == slot) activeTab = MAX_PINNED_SLOTS;
+    }
+
+    /**
+     * Check if a bundle is already pinned to any slot.
+     */
+    public boolean isBundlePinned(String bundleId) {
+        if (bundleId == null) return false;
+        for (int i = 0; i < MAX_PINNED_SLOTS; i++) {
+            if (bundleId.equals(pinnedBundleIds[i])) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Find which slot a bundle is pinned to, or -1 if not pinned.
+     */
+    public int getSlotForBundle(String bundleId) {
+        if (bundleId == null) return -1;
+        for (int i = 0; i < MAX_PINNED_SLOTS; i++) {
+            if (bundleId.equals(pinnedBundleIds[i])) return i;
+        }
+        return -1;
     }
 
     public String getPinnedBundleId(int slot) {

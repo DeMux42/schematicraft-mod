@@ -274,6 +274,20 @@ public class PalettePanel {
      * Handle key press events. Returns true if consumed.
      */
     public boolean onKeyPressed(int keyCode, int scanCode, int modifiers) {
+        // Ctrl+1 through Ctrl+8: switch tabs
+        if ((modifiers & 2) != 0 && keyCode >= 49 && keyCode <= 56) { // CTRL + GLFW_KEY_1..8
+            int num = keyCode - 49;
+            PaletteState state = PaletteState.get();
+            if (num == 7) {
+                state.setActiveTab(PaletteState.MAX_PINNED_SLOTS);
+            } else if (state.isSlotPinned(num)) {
+                state.setActiveTab(num);
+            }
+            selectedIndex = 0;
+            rebuildList();
+            return true;
+        }
+
         // Esc: clear filter first, then close panel
         if (keyCode == 256) { // Escape
             PaletteState state = PaletteState.get();
