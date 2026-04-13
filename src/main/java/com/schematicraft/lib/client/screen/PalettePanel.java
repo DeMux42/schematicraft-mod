@@ -191,7 +191,8 @@ public class PalettePanel {
                     if (!query.isEmpty()) {
                         headerText += " \u00a77(" + entry.getMatchCount() + ")";
                     }
-                    listWidget.addEntry(new SchematicListWidget.HeaderEntry(listWidget, headerText));
+                    listWidget.addEntry(new SchematicListWidget.HeaderEntry(
+                            listWidget, headerText, b.id(), b.name()));
                 }
                 case SCHEMATIC -> {
                     SchematicEntry s = entry.getSchematic();

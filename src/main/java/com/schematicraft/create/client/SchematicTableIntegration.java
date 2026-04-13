@@ -168,7 +168,21 @@ public class SchematicTableIntegration {
 	private static void onLocalSchematicClicked(String pathStr, String title) {
 		selectedLocalFile = Path.of(pathStr);
 		showUploadForm = true;
-		selectedBundleIndex = 0;
+		// Auto-select the active bundle if on a pinned tab
+		com.schematicraft.lib.core.PaletteState palette = com.schematicraft.lib.core.PaletteState.get();
+		String activeBundleId = palette.getActiveBundleId();
+		if (activeBundleId != null) {
+			List<LibraryState.BundleOption> opts = LibraryState.get().getBundleOptions();
+			selectedBundleIndex = 0;
+			for (int i = 0; i < opts.size(); i++) {
+				if (activeBundleId.equals(opts.get(i).id())) {
+					selectedBundleIndex = i;
+					break;
+				}
+			}
+		} else {
+			selectedBundleIndex = 0;
+		}
 		uploadImages.clear();
 		Minecraft.getInstance().setScreen(Minecraft.getInstance().screen);
 	}
@@ -314,6 +328,25 @@ public class SchematicTableIntegration {
 	}
 
 	private static void onCloudSchematicClicked(String id, String title) {
+		// Check file cache first
+		com.schematicraft.lib.core.SchematicFileCache cache = com.schematicraft.lib.core.SchematicFileCache.get();
+		byte[] cached = cache.readCached(id);
+		if (cached != null) {
+			String filename = title != null ? title : "schematic";
+			Path saved = SchematicFileHelper.saveToSchematicsFolder(filename, cached);
+			if (saved != null) {
+				statusText = "\u00a7aSaved: " + saved.getFileName();
+				statusClearAt = System.currentTimeMillis() + 4000;
+				CreateClient.SCHEMATIC_SENDER.refresh();
+				rebuildLeftList();
+			} else {
+				statusText = "\u00a7cFailed to save file";
+				statusClearAt = System.currentTimeMillis() + 4000;
+			}
+			return;
+		}
+
+		// Cache miss: download from API
 		statusText = "\u00a7eDownloading...";
 
 		SchematiCraftAPIWrapper.get().runAsync(() -> {
@@ -324,6 +357,8 @@ public class SchematicTableIntegration {
 			Minecraft.getInstance().execute(() -> {
 				try {
 					byte[] data = Files.readAllBytes(result.file);
+					// Cache for next time
+					cache.store(id, "nbt", data);
 					Files.deleteIfExists(result.file);
 
 					String filename = title != null ? title : "schematic";
@@ -335,6 +370,7 @@ public class SchematicTableIntegration {
 						CreateClient.SCHEMATIC_SENDER.refresh();
 						SchematiCraftAPIWrapper.get().submitSuccessFeedback(result.downloadId);
 						rebuildLeftList();
+						if (palettePanel != null) palettePanel.rebuildList();
 					} else {
 						statusText = "\u00a7cFailed to save file";
 						statusClearAt = System.currentTimeMillis() + 4000;

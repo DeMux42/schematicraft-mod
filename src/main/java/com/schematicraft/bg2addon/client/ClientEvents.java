@@ -30,6 +30,20 @@ public class ClientEvents {
         if (ModKeyBindings.OPEN_API_KEY_SCREEN.consumeClick()) {
             mc.setScreen(new ApiKeyScreen(null));
         }
+
+        // Ctrl+1 through Ctrl+8: switch palette tab (works without panel open)
+        if (event.getAction() == 1 && (event.getModifiers() & 2) != 0) { // GLFW_PRESS + CTRL
+            int num = event.getKey() - 49; // GLFW_KEY_1 = 49, so 0-7
+            if (num >= 0 && num <= 7) {
+                com.schematicraft.lib.core.PaletteState state = com.schematicraft.lib.core.PaletteState.get();
+                if (num == 7) {
+                    // Ctrl+8 = Home tab
+                    state.setActiveTab(com.schematicraft.lib.core.PaletteState.MAX_PINNED_SLOTS);
+                } else if (state.isSlotPinned(num)) {
+                    state.setActiveTab(num);
+                }
+            }
+        }
     }
 
     @SubscribeEvent

@@ -336,7 +336,21 @@ public class EnhancedRadialMenu extends Screen {
     private void onClipboardSave(ClipboardEntry clip) {
         uploadTarget = clip;
         uploadImages.clear();
-        selectedBundleIndex = 0;
+        // Auto-select the active bundle if on a pinned tab
+        com.schematicraft.lib.core.PaletteState palette = com.schematicraft.lib.core.PaletteState.get();
+        String activeBundleId = palette.getActiveBundleId();
+        if (activeBundleId != null) {
+            java.util.List<com.schematicraft.lib.core.LibraryState.BundleOption> opts = state.getBundleOptions();
+            selectedBundleIndex = 0;
+            for (int i = 0; i < opts.size(); i++) {
+                if (activeBundleId.equals(opts.get(i).id())) {
+                    selectedBundleIndex = i;
+                    break;
+                }
+            }
+        } else {
+            selectedBundleIndex = 0;
+        }
         rightMode = RightMode.UPLOAD_FORM;
         rebuildWidgets();
     }

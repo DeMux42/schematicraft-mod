@@ -340,15 +340,32 @@ public class TemplateManagerIntegration {
     }
 
     private static void onSchematicClicked(String id, String title) {
+        // Check file cache first for instant load
+        com.schematicraft.lib.core.SchematicFileCache cache = com.schematicraft.lib.core.SchematicFileCache.get();
+        byte[] cached = cache.readCached(id);
+        if (cached != null) {
+            if (loadViaTemplateManager(cached)) {
+                statusText = "\u00a7aLoaded: " + title;
+            } else {
+                statusText = "\u00a7cFailed to parse template";
+            }
+            return;
+        }
+
+        // Cache miss: download from API
         statusText = "Downloading...";
         SchematiCraftAPIWrapper.get().downloadSchematic(id).thenAccept(result -> {
             Minecraft.getInstance().execute(() -> {
                 try {
                     byte[] data = Files.readAllBytes(result.file);
+                    // Cache the downloaded file for next time
+                    cache.store(id, "json", data);
                     Files.deleteIfExists(result.file);
                     if (loadViaTemplateManager(data)) {
                         statusText = "\u00a7aLoaded: " + title;
                         SchematiCraftAPIWrapper.get().submitSuccessFeedback(result.downloadId);
+                        // Rebuild list to show cache indicator
+                        if (palettePanel != null) palettePanel.rebuildList();
                     } else {
                         statusText = "\u00a7cFailed to parse template";
                     }
