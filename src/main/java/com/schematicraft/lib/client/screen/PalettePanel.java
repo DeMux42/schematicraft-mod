@@ -156,10 +156,12 @@ public class PalettePanel {
 
     /**
      * Rebuild the list widget from PaletteState's filtered results.
+     * After rebuilding, auto-selects the first schematic entry.
      */
     public void rebuildList() {
         if (listWidget == null) return;
         listWidget.clearEntries();
+        selectedIndex = -1;
 
         PaletteState state = PaletteState.get();
         LibraryState lib = LibraryState.get();
@@ -214,6 +216,9 @@ public class PalettePanel {
                 }
             }
         }
+
+        // Auto-select the first schematic entry
+        selectFirstSchematic();
     }
 
     /**
@@ -302,11 +307,19 @@ public class PalettePanel {
 
         // Arrow keys for list navigation
         if (keyCode == 264) { // Down
-            moveSelection(1);
+            if ((modifiers & 2) != 0) { // Ctrl+Down: jump to last
+                selectLastSchematic();
+            } else {
+                moveSelection(1);
+            }
             return true;
         }
         if (keyCode == 265) { // Up
-            moveSelection(-1);
+            if ((modifiers & 2) != 0) { // Ctrl+Up: jump to first
+                selectFirstSchematic();
+            } else {
+                moveSelection(-1);
+            }
             return true;
         }
 
@@ -353,6 +366,30 @@ public class PalettePanel {
                 return;
             }
             newIndex += delta;
+        }
+    }
+
+    private void selectFirstSchematic() {
+        if (listWidget == null) return;
+        var children = listWidget.children();
+        for (int i = 0; i < children.size(); i++) {
+            if (children.get(i) instanceof SchematicListWidget.SchematicEntry) {
+                selectedIndex = i;
+                listWidget.setSelected(children.get(i));
+                return;
+            }
+        }
+    }
+
+    private void selectLastSchematic() {
+        if (listWidget == null) return;
+        var children = listWidget.children();
+        for (int i = children.size() - 1; i >= 0; i--) {
+            if (children.get(i) instanceof SchematicListWidget.SchematicEntry) {
+                selectedIndex = i;
+                listWidget.setSelected(children.get(i));
+                return;
+            }
         }
     }
 
