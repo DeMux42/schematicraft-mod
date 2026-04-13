@@ -119,7 +119,7 @@ public class PalettePanel {
 
     private int initTabStrip(ScreenEvent.Init.Post event, Screen screen, Minecraft mc, int panelX, int y) {
         PaletteState state = PaletteState.get();
-        int tabW = PANEL_W / 8; // 8 tabs total (7 pinnable + Home)
+        int tabW = PANEL_W / 8;
         int tabH = 14;
 
         for (int i = 0; i < PaletteState.MAX_PINNED_SLOTS; i++) {
@@ -132,11 +132,33 @@ public class PalettePanel {
             var btn = net.minecraft.client.gui.components.Button.builder(
                     Component.literal(label),
                     b -> {
-                        state.setActiveTab(slot);
-                        mc.setScreen(screen); // re-init to rebuild
+                        if (pinned && Screen.hasControlDown() && Screen.hasShiftDown()) {
+                            // Ctrl+Shift+Click: clear all pins
+                            for (int s = 0; s < PaletteState.MAX_PINNED_SLOTS; s++) {
+                                state.unpinBundle(s);
+                            }
+                            ModConfig.setPinnedBundles(state.savePinnedToConfig());
+                            mc.setScreen(screen);
+                        } else if (pinned && Screen.hasControlDown()) {
+                            // Ctrl+Click: clear this pin
+                            state.unpinBundle(slot);
+                            ModConfig.setPinnedBundles(state.savePinnedToConfig());
+                            mc.setScreen(screen);
+                        } else if (pinned) {
+                            state.setActiveTab(slot);
+                            mc.setScreen(screen);
+                        }
                     })
                     .bounds(panelX + i * (tabW + 1), y, tabW, tabH).build();
             if (!pinned) btn.active = false;
+            // Tooltip with bundle name and clear hints
+            if (pinned) {
+                String bundleName = state.getPinnedBundleName(i);
+                btn.setTooltip(net.minecraft.client.gui.components.Tooltip.create(
+                        Component.literal(bundleName != null ? bundleName : "Pinned")
+                                .append(Component.literal("\n\u00a78Ctrl+click: clear"))
+                                .append(Component.literal("\n\u00a78Ctrl+Shift: clear all"))));
+            }
             event.addListener(btn);
         }
 
@@ -149,6 +171,8 @@ public class PalettePanel {
                     mc.setScreen(screen);
                 })
                 .bounds(panelX + PaletteState.MAX_PINNED_SLOTS * (tabW + 1), y, tabW, tabH).build();
+        homeBtn.setTooltip(net.minecraft.client.gui.components.Tooltip.create(
+                Component.literal("Home (all bundles)")));
         event.addListener(homeBtn);
 
         return y + tabH + 2;
