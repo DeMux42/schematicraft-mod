@@ -55,6 +55,18 @@ public class PalettePanel {
      * Initialize the panel widgets. Call from ScreenEvent.Init.Post.
      */
     public void init(ScreenEvent.Init.Post event, Screen screen) {
+        initWithAdder(event::addListener, screen);
+    }
+
+    /**
+     * Initialize the panel widgets directly (for Screen subclasses we own).
+     * The adder should call addRenderableWidget or equivalent.
+     */
+    public void initDirect(java.util.function.Consumer<net.minecraft.client.gui.components.events.GuiEventListener> adder, Screen screen) {
+        initWithAdder(adder, screen);
+    }
+
+    private void initWithAdder(java.util.function.Consumer<net.minecraft.client.gui.components.events.GuiEventListener> adder, Screen screen) {
         Minecraft mc = Minecraft.getInstance();
         PaletteState state = PaletteState.get();
 
@@ -69,11 +81,11 @@ public class PalettePanel {
         int y = 10;
 
         // Header: brand link + logout
-        event.addListener(net.minecraft.client.gui.components.Button.builder(
+        adder.accept(net.minecraft.client.gui.components.Button.builder(
                 Component.literal("\u00a7b\u2601 Schematicraft"),
                 b -> net.minecraft.Util.getPlatform().openUri("https://www.schematicraft.com"))
                 .bounds(panelX, y, PANEL_W - 14, 12).build());
-        event.addListener(net.minecraft.client.gui.components.Button.builder(
+        adder.accept(net.minecraft.client.gui.components.Button.builder(
                 Component.literal("\u00a7c\u2716"),
                 b -> { ModConfig.setApiKey(""); mc.setScreen(screen); })
                 .bounds(panelX + PANEL_W - 12, y, 12, 12).build());
@@ -89,18 +101,18 @@ public class PalettePanel {
             rebuildList();
         });
         filterField.setFocused(true);
-        event.addListener(filterField);
+        adder.accept(filterField);
         y += 16;
 
         // Tab strip: pinned bundles + Home
-        y = initTabStrip(event, screen, mc, panelX, y);
+        y = initTabStrip(adder, screen, mc, panelX, y);
 
         // Schematic list (leave 24px at bottom for status bar)
         int listH = screen.height - y - 24;
         listWidget = new SchematicListWidget(mc, PANEL_W, listH, y, panelX, (id, title) -> {
             onSchematicSelected.accept(id, title);
         });
-        event.addListener(listWidget);
+        adder.accept(listWidget);
 
         // Trigger initial filter
         state.refilter();
@@ -117,7 +129,7 @@ public class PalettePanel {
         }
     }
 
-    private int initTabStrip(ScreenEvent.Init.Post event, Screen screen, Minecraft mc, int panelX, int y) {
+    private int initTabStrip(java.util.function.Consumer<net.minecraft.client.gui.components.events.GuiEventListener> adder, Screen screen, Minecraft mc, int panelX, int y) {
         PaletteState state = PaletteState.get();
         int tabW = PANEL_W / 8;
         int tabH = 14;
@@ -159,7 +171,7 @@ public class PalettePanel {
                                 .append(Component.literal("\n\u00a78Ctrl+click: clear"))
                                 .append(Component.literal("\n\u00a78Ctrl+Shift: clear all"))));
             }
-            event.addListener(btn);
+            adder.accept(btn);
         }
 
         // Home tab (last slot)
@@ -173,7 +185,7 @@ public class PalettePanel {
                 .bounds(panelX + PaletteState.MAX_PINNED_SLOTS * (tabW + 1), y, tabW, tabH).build();
         homeBtn.setTooltip(net.minecraft.client.gui.components.Tooltip.create(
                 Component.literal("Home (all bundles)")));
-        event.addListener(homeBtn);
+        adder.accept(homeBtn);
 
         return y + tabH + 2;
     }

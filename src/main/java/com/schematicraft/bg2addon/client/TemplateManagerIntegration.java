@@ -14,7 +14,6 @@ import com.schematicraft.lib.client.screen.ApiKeyScreen;
 import com.schematicraft.lib.client.screen.SchematicListWidget;
 import com.schematicraft.bg2addon.core.*;
 import com.schematicraft.bg2addon.network.SchematiCraftAPIWrapper;
-import com.schematicraft.lib.network.ServerMode;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
@@ -36,44 +35,23 @@ import java.util.UUID;
 /**
  * Injects Schematicraft panels into BG2's Template Manager GUI.
  *
- * This is the primary integration path when the server does not have the
- * Schematicraft mod installed (client-only mode). The Template Manager is a
- * vanilla BG2 block that handles template storage via SendPastePayload, a
- * packet that BG2's server always processes regardless of addon mods.
+ * Layout (both client-only and server mode):
+ *   Left: Clipboard list + 3D preview (BG2-specific)
+ *   Center: BG2's native Template Manager GUI
+ *   Right: PalettePanel (cloud library, filter, pinned tabs)
  *
- * Server mode: renders a small hint ("Open gadget (G) for Schematicraft")
- * since the Copy/Paste gadget's EnhancedRadialMenu handles everything.
- *
- * Client-only mode: injects full panels via ScreenEvent.Init.Post (for
- * interactive widgets) and ScreenEvent.Render.Post (for backgrounds drawn
- * on top of the container's own rendering). Left panel has library/search.
- * Right panel has clipboard (populated when a Copy/Paste gadget is in
- * the Template Manager's tool slot).
- *
- * BG2 Integration Points:
- * - TemplateManagerGUI: detected via instanceof, container accessed via getMenu()
- * - Container slot 0: tool/gadget slot, checked for GadgetCopyPaste/GadgetCutPaste
- * - SendPastePayload: BG2's own packet for writing template data into the
- *   Template Manager's storage. Used for both library downloads and clipboard loads.
- * - BG2Data.statePosListToNBTMapArray: converts clipboard StatePos data to the
- *   NBT format that SendPastePayload expects
- *
- * Rendering approach:
- * The Template Manager is an AbstractContainerScreen. Its render() draws the
- * container background texture, slot overlays, and a 3D preview panel on top
- * of all widgets. To prevent our panels from being hidden behind the container
- * background, we draw panel backgrounds in Render.Post (after the container
- * finishes rendering), then re-render our widgets (lists, buttons, search field)
- * on top of those backgrounds.
+ * The Template Manager always shows our panels regardless of server mode.
+ * The Copy/Paste gadget's EnhancedRadialMenu is the one that's disabled
+ * in client-only mode, not the Template Manager.
  */
 public class TemplateManagerIntegration {
     private static final Logger LOGGER = LogUtils.getLogger();
     private static final int PANEL_W = 170;
 
-    // Left panel: shared PalettePanel (replaces old Library/Search tabs)
+    // Right panel: shared PalettePanel (cloud library)
     private static com.schematicraft.lib.client.screen.PalettePanel palettePanel;
 
-    // Right panel: clipboard (BG2-specific)
+    // Left panel: clipboard (BG2-specific)
     private static SchematicListWidget clipboardList;
     private static String statusText = "";
     private static boolean lastGadgetState = false;
@@ -88,21 +66,19 @@ public class TemplateManagerIntegration {
         palettePanel = null;
         clipboardList = null;
 
-        if (ServerMode.isDirectModeAvailable()) {
-            return;
-        }
-
         if (!ModConfig.hasApiKey()) {
             initNoKeyWidgets(event, gui, mc);
             return;
         }
 
-        // Left panel: PalettePanel with always-on filter, pinned bundle tabs
+        // Right panel: PalettePanel (cloud library)
         palettePanel = new com.schematicraft.lib.client.screen.PalettePanel(
-                TemplateManagerIntegration::onSchematicClicked);
+                TemplateManagerIntegration::onSchematicClicked,
+                com.schematicraft.lib.client.screen.PalettePanel.Side.RIGHT);
         palettePanel.init(event, gui);
 
-        initRightPanel(event, gui, mc);
+        // Left panel: clipboard + preview
+        initLeftPanel(event, gui, mc);
     }
 
     private static void initNoKeyWidgets(ScreenEvent.Init.Post event, TemplateManagerGUI gui, Minecraft mc) {
@@ -116,13 +92,13 @@ public class TemplateManagerIntegration {
                 .bounds(leftX, y + 20, PANEL_W, 16).build());
     }
 
-    private static void initRightPanel(ScreenEvent.Init.Post event, TemplateManagerGUI gui, Minecraft mc) {
-        int rightX = gui.width - PANEL_W - 4;
-        int y = 24;
+    private static void initLeftPanel(ScreenEvent.Init.Post event, TemplateManagerGUI gui, Minecraft mc) {
+        int leftX = 4;
+        int y = 28; // below header + underline
 
         // Clipboard takes top half, preview takes bottom half
         int clipListH = (gui.height - y - 16) / 2;
-        clipboardList = new SchematicListWidget(mc, PANEL_W, clipListH, y, rightX,
+        clipboardList = new SchematicListWidget(mc, PANEL_W, clipListH, y, leftX,
                 TemplateManagerIntegration::onClipboardClicked);
         event.addListener(clipboardList);
         lastGadgetState = false;
@@ -177,39 +153,33 @@ public class TemplateManagerIntegration {
         // Visual grouping: subtle warm tint behind the gadget (tool) slot
         // to visually separate it from the template slot + render panel.
         // The gadget slot is at container x=132, y=18. Container offset is leftPos-20, topPos-12.
-        int guiLeft = (gui.width - 176) / 2;  // leftPos
-        int guiTop = (gui.height - 166) / 2;   // topPos
-        // Gadget slot background: snug around the slot with padding
+        int guiLeft = (gui.width - 176) / 2;
+        int guiTop = (gui.height - 166) / 2;
         // Gadget slot highlight with rounded left corners (2px radius)
         int hx1 = guiLeft + 126, hy1 = guiTop + 12, hx2 = guiLeft + 152, hy2 = guiTop + 61;
         int hc = 0x28CC8844;
-        g.fill(hx1 + 2, hy1, hx2, hy1 + 1, hc);     // top row: 2px inset left
-        g.fill(hx1 + 1, hy1 + 1, hx2, hy1 + 2, hc);  // second row: 1px inset left
-        g.fill(hx1, hy1 + 2, hx2, hy2 - 2, hc);       // main body: full width
-        g.fill(hx1 + 1, hy2 - 2, hx2, hy2 - 1, hc);  // second-to-last row: 1px inset
-        g.fill(hx1 + 2, hy2 - 1, hx2, hy2, hc);       // bottom row: 2px inset
-
-        if (ServerMode.isDirectModeAvailable()) {
-            // Server mode: just a small hint
-            String hint = "Open Copy/Paste gadget (G) for Schematicraft";
-            int hintW = mc.font.width(hint) + 12;
-            g.fill(gui.width - hintW - 4, 6, gui.width, 24, 0xD0080808);
-            g.drawString(mc.font, "\u00a77" + hint, gui.width - hintW, 10, 0x999999);
-            return;
-        }
+        g.fill(hx1 + 2, hy1, hx2, hy1 + 1, hc);
+        g.fill(hx1 + 1, hy1 + 1, hx2, hy1 + 2, hc);
+        g.fill(hx1, hy1 + 2, hx2, hy2 - 2, hc);
+        g.fill(hx1 + 1, hy2 - 2, hx2, hy2 - 1, hc);
+        g.fill(hx1 + 2, hy2 - 1, hx2, hy2, hc);
 
         if (!ModConfig.hasApiKey()) {
             g.fill(0, 6, PANEL_W + 8, 70, 0xD0080808);
             g.drawString(mc.font, "\u00a7b\u2601 Schematicraft", leftX, 12, 0xFFFFFF);
-            g.fill(leftX, 20, leftX + PANEL_W, 21, 0x30FFFFFF);
+            g.fill(leftX, 26, leftX + PANEL_W, 27, 0x30FFFFFF);
             return;
         }
 
-        // Panel backgrounds (drawn on top of the container background)
-        g.fill(rightX - 5, 6, gui.width, gui.height - 6, 0xD0080808);
-        g.fill(rightX - 6, 6, rightX - 5, gui.height - 6, 0x40FFFFFF);
+        // Left panel background (clipboard)
+        g.fill(0, 6, PANEL_W + 8, gui.height - 6, 0xD0080808);
+        g.fill(PANEL_W + 8, 6, PANEL_W + 9, gui.height - 6, 0x40FFFFFF);
 
-        // Left panel: PalettePanel handles its own background and widget rendering
+        // Left header
+        g.drawString(mc.font, "\u00a7a\u2702 Clipboard", leftX, 12, 0xFFAAFFAA);
+        g.fill(leftX, 26, leftX + PANEL_W, 27, 0x30FFFFFF);
+
+        // Right panel: PalettePanel handles its own background and widget rendering
         int mx = event.getMouseX();
         int my = event.getMouseY();
         float pt = event.getPartialTick();
@@ -217,26 +187,21 @@ public class TemplateManagerIntegration {
             palettePanel.render(g, gui, mx, my, pt);
         }
 
-        // Right header
-        g.drawString(mc.font, "\u00a7a\u2702 Clipboard", rightX, 12, 0xFFAAFFAA);
-        g.fill(rightX, 20, rightX + PANEL_W, 21, 0x30FFFFFF);
-
         // Status text above hotbar area
         if (!statusText.isEmpty()) {
             g.drawCenteredString(mc.font, statusText, gui.width / 2, gui.height - 14, 0xCCCCCC);
         }
 
-        // Re-render right panel widgets on top of backgrounds
+        // Re-render left panel widgets on top of backgrounds
         if (clipboardList != null) clipboardList.render(g, mx, my, pt);
 
-        // Clipboard 3D preview (bottom half of right panel)
+        // Clipboard 3D preview (bottom half of left panel)
         if (clipboardList != null && lastGadgetState) {
             int clipBottom = clipboardList.getBottom();
             int previewY = clipBottom + 4;
             int previewH = gui.height - previewY - 12;
 
             if (previewH > 30) {
-                // Detect hovered entry by mouse position
                 ClipboardEntry newHover = null;
                 for (var child : clipboardList.children()) {
                     if (child instanceof SchematicListWidget.SchematicEntry se && child.isMouseOver(mx, my)) {
@@ -259,12 +224,12 @@ public class TemplateManagerIntegration {
                 }
 
                 if (hoveredClipboardEntry != null) {
-                    g.fill(rightX - 2, previewY - 2, rightX + PANEL_W + 2, previewY + previewH + 2, 0x60000000);
-                    g.fill(rightX - 2, previewY - 2, rightX + PANEL_W + 2, previewY - 1, 0x30FFFFFF);
-                    g.drawString(mc.font, "\u00a78Preview", rightX, previewY + 2, 0x555555);
+                    g.fill(leftX - 2, previewY - 2, leftX + PANEL_W + 2, previewY + previewH + 2, 0x60000000);
+                    g.fill(leftX - 2, previewY - 2, leftX + PANEL_W + 2, previewY - 1, 0x30FFFFFF);
+                    g.drawString(mc.font, "\u00a78Preview", leftX, previewY + 2, 0x555555);
 
                     g.flush();
-                    ClipboardPreviewRenderer.get().render(g, rightX, previewY, PANEL_W, previewH);
+                    ClipboardPreviewRenderer.get().render(g, leftX, previewY, PANEL_W, previewH);
                 }
             }
         }
@@ -277,20 +242,18 @@ public class TemplateManagerIntegration {
             boolean hoveringOurPanels = false;
             boolean hoveringCopyBtn = false;
 
-            // Our panels (client-only mode)
-            if (!ServerMode.isDirectModeAvailable()) {
-                if (palettePanel != null && palettePanel.getListWidget() != null) {
-                    for (var child : palettePanel.getListWidget().children()) {
-                        if (child instanceof SchematicListWidget.SchematicEntry && child.isMouseOver(mx, my)) {
-                            hoveringOurPanels = true; break;
-                        }
+            // Our panels
+            if (palettePanel != null && palettePanel.getListWidget() != null) {
+                for (var child : palettePanel.getListWidget().children()) {
+                    if (child instanceof SchematicListWidget.SchematicEntry && child.isMouseOver(mx, my)) {
+                        hoveringOurPanels = true; break;
                     }
                 }
-                if (!hoveringOurPanels && clipboardList != null) {
-                    for (var child : clipboardList.children()) {
-                        if (child instanceof SchematicListWidget.SchematicEntry && child.isMouseOver(mx, my)) {
-                            hoveringOurPanels = true; break;
-                        }
+            }
+            if (!hoveringOurPanels && clipboardList != null) {
+                for (var child : clipboardList.children()) {
+                    if (child instanceof SchematicListWidget.SchematicEntry && child.isMouseOver(mx, my)) {
+                        hoveringOurPanels = true; break;
                     }
                 }
             }
