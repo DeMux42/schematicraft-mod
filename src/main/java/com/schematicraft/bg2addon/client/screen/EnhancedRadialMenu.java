@@ -37,7 +37,7 @@ public class EnhancedRadialMenu extends Screen {
     private final ItemStack gadgetStack;
     private int animationTime = 0;
 
-    private static final int PANEL_W = 170;
+    private static final int PANEL_W = 180;
     private int leftX, rightX, panelTop, panelH;
 
     // Status
@@ -146,7 +146,8 @@ public class EnhancedRadialMenu extends Screen {
     }
 
     private void initClipboardPanel(int y, int pw) {
-        int listHeight = (panelH - 28) / 2;
+        int previewH = 160;
+        int listHeight = panelH - (y - panelTop) - previewH - 14;
         clipboardList = new SchematicListWidget(minecraft, pw, listHeight, y, leftX, this::onClipboardLoad);
         addRenderableWidget(clipboardList);
         rebuildClipboardList();
@@ -469,7 +470,7 @@ public class EnhancedRadialMenu extends Screen {
             case UPLOAD_FORM -> "\u00a7e\u2B06 Save Schematic";
             case CREATE_BUNDLE -> "\u00a7e\u2795 New Bundle";
         };
-        g.drawString(font, leftHeader, leftX, panelTop, 0xFFAAFFAA);
+        g.drawString(font, leftHeader, leftX + 2, panelTop, 0xFFAAFFAA);
         g.fill(leftX, panelTop + 10, leftX + PANEL_W, panelTop + 11, 0x30FFFFFF);
 
         // Right panel: PalettePanel renders itself
@@ -509,8 +510,8 @@ public class EnhancedRadialMenu extends Screen {
 
         // Clipboard 3D preview
         if (leftMode == LeftMode.CLIPBOARD) {
-            int previewY = panelTop + 14 + (panelH - 28) / 2 + 4;
-            int previewH = (panelH - 28) / 2 - 8;
+            int previewH = 160;
+            int previewY = height - 10 - previewH - 6;
 
             // Show selected entry, or most recent copy
             ClipboardEntry previewEntry = selectedPreviewEntry != null
@@ -523,8 +524,8 @@ public class EnhancedRadialMenu extends Screen {
             }
 
             if (hoveredClipboardEntry != null) {
-                g.fill(leftX - 2, previewY - 2, leftX + PANEL_W + 2, previewY + previewH + 2, 0x60000000);
-                g.fill(leftX - 2, previewY - 2, leftX + PANEL_W + 2, previewY - 1, 0x30FFFFFF);
+                g.fill(leftX, previewY - 2, leftX + PANEL_W, previewY + previewH + 2, 0x60000000);
+                g.fill(leftX, previewY - 2, leftX + PANEL_W, previewY - 1, 0x30FFFFFF);
                 g.drawString(font, "\u00a78Preview", leftX, previewY + 2, 0x555555);
 
                 g.flush();
@@ -573,6 +574,16 @@ public class EnhancedRadialMenu extends Screen {
 
     @Override
     public boolean mouseClicked(double mx, double my, int btn) {
+        // Left-click in preview area: start drag
+        if (btn == 0 && leftMode == LeftMode.CLIPBOARD && clipboardList != null) {
+            int previewH = 160;
+            int previewY = height - 10 - previewH - 6;
+            if (com.schematicraft.bg2addon.client.ClipboardPreviewRenderer.get()
+                    .onMousePressed(mx, my, leftX, previewY, PANEL_W, previewH)) {
+                return true;
+            }
+        }
+
         // Right-click on bundle button cycles backward
         if (btn == 1 && bundleButton != null && leftMode == LeftMode.UPLOAD_FORM
                 && mx >= bundleButton.getX() && mx <= bundleButton.getX() + bundleButton.getWidth()
@@ -591,6 +602,22 @@ public class EnhancedRadialMenu extends Screen {
         if (innerHandled) return true;
 
         return super.mouseClicked(mx, my, btn);
+    }
+
+    @Override
+    public boolean mouseReleased(double mx, double my, int btn) {
+        if (btn == 0) {
+            com.schematicraft.bg2addon.client.ClipboardPreviewRenderer.get().onMouseReleased();
+        }
+        return super.mouseReleased(mx, my, btn);
+    }
+
+    @Override
+    public boolean mouseDragged(double mx, double my, int btn, double dx, double dy) {
+        if (btn == 0) {
+            com.schematicraft.bg2addon.client.ClipboardPreviewRenderer.get().onMouseDragged(mx, my);
+        }
+        return super.mouseDragged(mx, my, btn, dx, dy);
     }
 
     @Override

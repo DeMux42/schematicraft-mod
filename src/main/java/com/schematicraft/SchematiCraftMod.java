@@ -59,6 +59,10 @@ public class SchematiCraftMod {
                     com.schematicraft.bg2addon.client.TemplateManagerIntegration::onCharTyped);
                 NeoForge.EVENT_BUS.addListener(
                     com.schematicraft.bg2addon.client.TemplateManagerIntegration::onMouseClicked);
+                NeoForge.EVENT_BUS.addListener(
+                    com.schematicraft.bg2addon.client.TemplateManagerIntegration::onMouseReleased);
+                NeoForge.EVENT_BUS.addListener(
+                    com.schematicraft.bg2addon.client.TemplateManagerIntegration::onMouseDragged);
             }
         }
 

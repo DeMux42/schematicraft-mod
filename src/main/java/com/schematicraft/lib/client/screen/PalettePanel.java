@@ -30,7 +30,7 @@ import java.util.function.BiConsumer;
  */
 public class PalettePanel {
     private static final Logger LOGGER = LogUtils.getLogger();
-    public static final int PANEL_W = 170;
+    public static final int PANEL_W = 180;
 
     private EditBox filterField;
     private SchematicListWidget listWidget;
@@ -290,17 +290,12 @@ public class PalettePanel {
         // Header underline (below the header buttons)
         g.fill(panelX, 26, panelX + PANEL_W, 27, 0x30FFFFFF);
 
-        // Active tab indicator
-        PaletteState state = PaletteState.get();
-        if (!state.isHomeTab() && state.getActiveBundleId() != null) {
-            String bundleName = state.getActiveBundleName();
-            g.drawString(mc.font, "\u00a7e" + bundleName, panelX + 2, screen.height - 22, 0xFFAA00);
-        }
-
         // Status bar (inside the panel, above the bottom edge)
-        int totalCount = countTotalSchematics();
+        PaletteState state = PaletteState.get();
+        int totalCount = state.isHomeTab() ? countTotalSchematics() : countScopedSchematics(state);
         int shownCount = countShownSchematics(state.getFilteredResults());
-        String statusLeft = shownCount + " of " + totalCount;
+        String scopeName = state.isHomeTab() ? "" : state.getActiveBundleName() + ": ";
+        String statusLeft = scopeName + shownCount + " of " + totalCount;
         String statusRight = "\u2191\u2193 nav \u00b7 Enter load";
         g.drawString(mc.font, "\u00a78" + statusLeft, panelX + 2, screen.height - 17, 0x666666);
         int rightW = mc.font.width(statusRight);
@@ -326,6 +321,9 @@ public class PalettePanel {
             }
             selectedIndex = 0;
             rebuildList();
+            // Re-init screen to update tab button highlights
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.screen != null) mc.setScreen(mc.screen);
             return true;
         }
 
@@ -472,6 +470,15 @@ public class PalettePanel {
         int count = lib.getUnbundled().size();
         for (BundleEntry b : lib.getBundles()) count += b.schematics().size();
         return count;
+    }
+
+    private int countScopedSchematics(PaletteState state) {
+        String bundleId = state.getActiveBundleId();
+        if (bundleId == null) return countTotalSchematics();
+        for (BundleEntry b : LibraryState.get().getBundles()) {
+            if (bundleId.equals(b.id())) return b.schematics().size();
+        }
+        return 0;
     }
 
     private int countShownSchematics(List<PaletteState.FilteredEntry> results) {

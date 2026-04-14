@@ -46,7 +46,7 @@ import java.util.UUID;
  */
 public class TemplateManagerIntegration {
     private static final Logger LOGGER = LogUtils.getLogger();
-    private static final int PANEL_W = 170;
+    private static final int PANEL_W = 180;
 
     // Right panel: shared PalettePanel (cloud library)
     private static com.schematicraft.lib.client.screen.PalettePanel palettePanel;
@@ -96,8 +96,9 @@ public class TemplateManagerIntegration {
         int leftX = 6;
         int y = 28; // below header + underline
 
-        // Clipboard takes top half, preview takes bottom half
-        int clipListH = (gui.height - y - 16) / 2;
+        // Clipboard takes top portion, preview takes fixed 160px at bottom
+        int previewH = 160;
+        int clipListH = gui.height - y - 16 - previewH;
         clipboardList = new SchematicListWidget(mc, PANEL_W, clipListH, y, leftX,
                 TemplateManagerIntegration::onClipboardClicked);
         event.addListener(clipboardList);
@@ -108,7 +109,7 @@ public class TemplateManagerIntegration {
 
     @SubscribeEvent
     public static void onMouseClicked(ScreenEvent.MouseButtonPressed.Pre event) {
-        if (!(event.getScreen() instanceof TemplateManagerGUI)) return;
+        if (!(event.getScreen() instanceof TemplateManagerGUI gui)) return;
         if (event.getButton() == 1 && palettePanel != null && palettePanel.getListWidget() != null) {
             double mx = event.getMouseX();
             double my = event.getMouseY();
@@ -118,6 +119,29 @@ public class TemplateManagerIntegration {
                 }
             }
         }
+        // Forward left-clicks to clipboard preview for drag control
+        if (event.getButton() == 0 && clipboardList != null && lastGadgetState) {
+            int previewY = clipboardList.getBottom() + 4;
+            int previewH = gui.height - previewY - 12;
+            if (ClipboardPreviewRenderer.get().onMousePressed(
+                    event.getMouseX(), event.getMouseY(), 6, previewY, PANEL_W, previewH)) {
+                event.setCanceled(true);
+            }
+        }
+    }
+
+    @SubscribeEvent
+    public static void onMouseReleased(ScreenEvent.MouseButtonReleased.Pre event) {
+        if (!(event.getScreen() instanceof TemplateManagerGUI)) return;
+        if (event.getButton() == 0) {
+            ClipboardPreviewRenderer.get().onMouseReleased();
+        }
+    }
+
+    @SubscribeEvent
+    public static void onMouseDragged(ScreenEvent.MouseDragged.Pre event) {
+        if (!(event.getScreen() instanceof TemplateManagerGUI)) return;
+        ClipboardPreviewRenderer.get().onMouseDragged(event.getMouseX(), event.getMouseY());
     }
 
     @SubscribeEvent
@@ -171,12 +195,16 @@ public class TemplateManagerIntegration {
             return;
         }
 
+        // Push Z level above BG2's container overlay so our panels aren't dimmed
+        g.pose().pushPose();
+        g.pose().translate(0, 0, 400);
+
         // Left panel background (clipboard)
         g.fill(6, 6, PANEL_W + 10, gui.height - 6, 0xD0080808);
         g.fill(PANEL_W + 10, 6, PANEL_W + 11, gui.height - 6, 0x40FFFFFF);
 
         // Left header
-        g.drawString(mc.font, "\u00a7a\u2702 Clipboard", leftX, 12, 0xFFAAFFAA);
+        g.drawString(mc.font, "\u00a7a\u2702 Clipboard", leftX + 2, 12, 0xFFAAFFAA);
         g.fill(leftX, 26, leftX + PANEL_W, 27, 0x30FFFFFF);
 
         // Right panel: PalettePanel handles its own background and widget rendering
@@ -224,8 +252,8 @@ public class TemplateManagerIntegration {
                 }
 
                 if (hoveredClipboardEntry != null) {
-                    g.fill(leftX - 2, previewY - 2, leftX + PANEL_W + 2, previewY + previewH + 2, 0x60000000);
-                    g.fill(leftX - 2, previewY - 2, leftX + PANEL_W + 2, previewY - 1, 0x30FFFFFF);
+                    g.fill(leftX, previewY - 2, leftX + PANEL_W, previewY + previewH + 2, 0x60000000);
+                    g.fill(leftX, previewY - 2, leftX + PANEL_W, previewY - 1, 0x30FFFFFF);
                     g.drawString(mc.font, "\u00a78Preview", leftX, previewY + 2, 0x555555);
 
                     g.flush();
@@ -276,6 +304,8 @@ public class TemplateManagerIntegration {
                 g.fill(slotX, slotY, slotX + 16, slotY + 17, color);
             }
         }
+
+        g.pose().popPose(); // Restore Z level
 
         // Refresh clipboard when gadget state changes
         boolean hasGadget = hasInsertedCopyPasteGadget(gui);

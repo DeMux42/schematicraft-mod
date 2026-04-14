@@ -37,7 +37,7 @@ import java.util.List;
  */
 public class SchematicTableIntegration {
 	private static final Logger LOGGER = LogUtils.getLogger();
-	private static final int PANEL_W = 170;
+	private static final int PANEL_W = 180;
 
 	// Right panel: PalettePanel (replaces old Library/Search tabs)
 	private static com.schematicraft.lib.client.screen.PalettePanel palettePanel;
@@ -359,9 +359,9 @@ public class SchematicTableIntegration {
 		g.fill(PANEL_W + 10, 6, PANEL_W + 11, screen.height - 6, 0x40FFFFFF);
 
 		if (showUploadForm) {
-			g.drawString(mc.font, "\u00a7e\u2B06 Upload Schematic", leftX, 12, 0xFFFFFF);
+			g.drawString(mc.font, "\u00a7e\u2B06 Upload Schematic", leftX + 2, 12, 0xFFFFFF);
 		} else {
-			g.drawString(mc.font, "\u00a7a\u2702 Local Schematics", leftX, 12, 0xFFFFFF);
+			g.drawString(mc.font, "\u00a7a\u2702 Local Schematics", leftX + 2, 12, 0xFFFFFF);
 		}
 		g.fill(leftX, 26, leftX + PANEL_W, 27, 0x30FFFFFF);
 
@@ -401,8 +401,8 @@ public class SchematicTableIntegration {
 					renderer.prepare(previewTarget);
 
 					// Preview background
-					g.fill(leftX - 2, previewY - 2, leftX + PANEL_W + 2, previewY + previewH + 2, 0x60000000);
-					g.fill(leftX - 2, previewY - 2, leftX + PANEL_W + 2, previewY - 1, 0x30FFFFFF);
+					g.fill(leftX, previewY - 2, leftX + PANEL_W, previewY + previewH + 2, 0x60000000);
+					g.fill(leftX, previewY - 2, leftX + PANEL_W, previewY - 1, 0x30FFFFFF);
 
 					// Label
 					String previewLabel = previewTarget.getFileName().toString().replace(".nbt", "");
