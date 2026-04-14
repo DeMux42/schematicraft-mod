@@ -30,14 +30,14 @@ import java.util.function.BiConsumer;
  */
 public class PalettePanel {
     private static final Logger LOGGER = LogUtils.getLogger();
-    public static final int PANEL_W = 180;
+    public static final int PANEL_W = PanelLayout.PANEL_W;
 
     private EditBox filterField;
     private SchematicListWidget listWidget;
     private final BiConsumer<String, String> onSchematicSelected;
     private int selectedIndex = 0;
     private boolean initialized = false;
-    private int panelX = 4; // left edge X position
+    private int panelX = PanelLayout.LEFT_X;
 
     public enum Side { LEFT, RIGHT }
     private Side side = Side.LEFT;
@@ -77,19 +77,19 @@ public class PalettePanel {
             initialized = true;
         }
 
-        panelX = (side == Side.RIGHT) ? screen.width - PANEL_W - 6 : 6;
-        int y = 10;
+        panelX = (side == Side.RIGHT) ? PanelLayout.rightX(screen.width) : PanelLayout.LEFT_X;
+        int y = PanelLayout.CONTENT_TOP;
 
-        // Header: brand link + logout (with right margin for X button)
+        // Header: brand link + logout
         adder.accept(net.minecraft.client.gui.components.Button.builder(
                 Component.literal("\u00a7b\u2601 Schematicraft"),
                 b -> net.minecraft.Util.getPlatform().openUri("https://www.schematicraft.com"))
-                .bounds(panelX, y, PANEL_W - 18, 12).build());
+                .bounds(panelX, y, PANEL_W - PanelLayout.CLOSE_BTN_MARGIN, 12).build());
         adder.accept(net.minecraft.client.gui.components.Button.builder(
                 Component.literal("\u00a7c\u2716"),
                 b -> { ModConfig.setApiKey(""); mc.setScreen(screen); })
-                .bounds(panelX + PANEL_W - 14, y, 12, 12).build());
-        y += 20; // extra spacing below header
+                .bounds(panelX + PANEL_W - PanelLayout.CLOSE_BTN_INSET, y, PanelLayout.CLOSE_BTN_W, 12).build());
+        y += PanelLayout.HEADER_GAP;
 
         // Filter field (always on, auto-focused)
         filterField = new EditBox(mc.font, panelX, y, PANEL_W, 14, Component.literal(""));
@@ -107,8 +107,8 @@ public class PalettePanel {
         // Tab strip: pinned bundles + Home
         y = initTabStrip(adder, screen, mc, panelX, y);
 
-        // Schematic list (leave 24px at bottom for status bar)
-        int listH = screen.height - y - 24;
+        // Schematic list (leave space at bottom for status bar)
+        int listH = screen.height - y - PanelLayout.STATUS_BAR_H;
         listWidget = new SchematicListWidget(mc, PANEL_W, listH, y, panelX, (id, title) -> {
             onSchematicSelected.accept(id, title);
         });
@@ -276,32 +276,33 @@ public class PalettePanel {
     public void render(GuiGraphics g, Screen screen, int mouseX, int mouseY, float partialTick) {
         Minecraft mc = Minecraft.getInstance();
 
-        // Panel background (padding around content area)
-        int padLeft = 6;  // wider on the inward side to match visible right margin
-        int padRight = 3;
-        int bgLeft = (side == Side.RIGHT) ? panelX - padLeft : panelX - padRight;
-        int bgRight = (side == Side.RIGHT) ? panelX + PANEL_W + padRight : panelX + PANEL_W + padLeft;
-        g.fill(bgLeft, 6, bgRight, screen.height - 6, 0xD0080808);
-        // Edge separator (on the side facing the center of the screen)
+        // Panel background
+        int bgLeft = (side == Side.RIGHT) ? PanelLayout.rightBgLeft(screen.width) : PanelLayout.LEFT_BG_LEFT;
+        int bgRight = (side == Side.RIGHT) ? PanelLayout.rightBgRight(screen.width) : PanelLayout.LEFT_BG_RIGHT;
+        g.fill(bgLeft, PanelLayout.SCREEN_MARGIN, bgRight, screen.height - PanelLayout.SCREEN_MARGIN, 0xD0080808);
+        // Edge separator
         if (side == Side.RIGHT) {
-            g.fill(bgLeft - 1, 6, bgLeft, screen.height - 6, 0x40FFFFFF);
+            int sep = PanelLayout.rightSeparatorX(screen.width);
+            g.fill(sep, PanelLayout.SCREEN_MARGIN, sep + 1, screen.height - PanelLayout.SCREEN_MARGIN, 0x40FFFFFF);
         } else {
-            g.fill(bgRight, 6, bgRight + 1, screen.height - 6, 0x40FFFFFF);
+            g.fill(PanelLayout.LEFT_SEPARATOR_X, PanelLayout.SCREEN_MARGIN,
+                    PanelLayout.LEFT_SEPARATOR_X + 1, screen.height - PanelLayout.SCREEN_MARGIN, 0x40FFFFFF);
         }
 
-        // Header underline (below the header buttons)
-        g.fill(panelX, 26, panelX + PANEL_W, 27, 0x30FFFFFF);
+        // Header underline
+        g.fill(panelX, PanelLayout.HEADER_LINE_Y, panelX + PANEL_W, PanelLayout.HEADER_LINE_Y + 1, 0x30FFFFFF);
 
-        // Status bar (inside the panel, above the bottom edge)
+        // Status bar
         PaletteState state = PaletteState.get();
         int totalCount = state.isHomeTab() ? countTotalSchematics() : countScopedSchematics(state);
         int shownCount = countShownSchematics(state.getFilteredResults());
         String scopeName = state.isHomeTab() ? "" : state.getActiveBundleName() + ": ";
         String statusLeft = scopeName + shownCount + " of " + totalCount;
         String statusRight = "\u2191\u2193 nav \u00b7 Enter load";
-        g.drawString(mc.font, "\u00a78" + statusLeft, panelX + 2, screen.height - 17, 0x666666);
+        int statusY = screen.height - PanelLayout.STATUS_TEXT_Y_OFFSET;
+        g.drawString(mc.font, "\u00a78" + statusLeft, panelX + 2, statusY, 0x666666);
         int rightW = mc.font.width(statusRight);
-        g.drawString(mc.font, "\u00a78" + statusRight, panelX + PANEL_W - rightW, screen.height - 17, 0x666666);
+        g.drawString(mc.font, "\u00a78" + statusRight, panelX + PANEL_W - rightW, statusY, 0x666666);
 
         // Re-render widgets on top of panel background
         if (listWidget != null) listWidget.render(g, mouseX, mouseY, partialTick);

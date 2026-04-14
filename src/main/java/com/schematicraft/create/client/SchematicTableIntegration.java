@@ -1,5 +1,6 @@
 package com.schematicraft.create.client;
 
+import com.schematicraft.lib.client.screen.PanelLayout;
 import com.mojang.logging.LogUtils;
 import com.simibubi.create.content.schematics.table.SchematicTableScreen;
 import com.simibubi.create.CreateClient;
@@ -37,7 +38,7 @@ import java.util.List;
  */
 public class SchematicTableIntegration {
 	private static final Logger LOGGER = LogUtils.getLogger();
-	private static final int PANEL_W = 180;
+	private static final int PANEL_W = PanelLayout.PANEL_W;
 
 	// Right panel: PalettePanel (replaces old Library/Search tabs)
 	private static com.schematicraft.lib.client.screen.PalettePanel palettePanel;
@@ -72,7 +73,7 @@ public class SchematicTableIntegration {
 		uploadDesc = null;
 
 		if (!ModConfig.hasApiKey()) {
-			int rightX = screen.width - PANEL_W - 6;
+			int rightX = PanelLayout.rightX(screen.width);
 			event.addListener(Button.builder(Component.literal("\u00a7bSchematicraft"),
 				b -> net.minecraft.Util.getPlatform().openUri("https://www.schematicraft.com"))
 				.bounds(rightX, 10, PANEL_W, 12).build());
@@ -92,12 +93,12 @@ public class SchematicTableIntegration {
 	}
 
 	private static void initLeftPanel(ScreenEvent.Init.Post event, SchematicTableScreen screen, Minecraft mc) {
-		int leftX = 6;
+		int leftX = PanelLayout.LEFT_X;
 
 		if (showUploadForm && selectedLocalFile != null) {
 			// Upload form (starts below the header underline)
 			String fileName = selectedLocalFile.getFileName().toString().replace(".nbt", "");
-			int fy = 30; // form start Y, below header + underline + gap
+			int fy = PanelLayout.BELOW_HEADER_Y + 2; // form start Y, below header + underline + gap
 
 			uploadTitle = new EditBox(mc.font, leftX, fy, PANEL_W, 14, Component.literal(""));
 			uploadTitle.setHint(Component.literal("Title"));
@@ -143,8 +144,8 @@ public class SchematicTableIntegration {
 			}).bounds(leftX + PANEL_W / 2 + 1, fy + 76, PANEL_W / 2 - 1, 16).build());
 		} else {
 			// Local schematics list (top half, bottom half is preview)
-			int listY = 28; // below header + underline + gap
-			int previewH = 160;
+			int listY = PanelLayout.BELOW_HEADER_Y; // below header + underline + gap
+			int previewH = PanelLayout.PREVIEW_H;
 			int listH = screen.height - listY - 16 - previewH;
 			leftList = new SchematicListWidget(mc, PANEL_W, listH, listY, leftX,
 				SchematicTableIntegration::onLocalSchematicClicked);
@@ -344,7 +345,7 @@ public class SchematicTableIntegration {
 
 		Minecraft mc = Minecraft.getInstance();
 		GuiGraphics g = event.getGuiGraphics();
-		int leftX = 6;
+		int leftX = PanelLayout.LEFT_X;
 		int mx = event.getMouseX();
 		int my = event.getMouseY();
 		float pt = event.getPartialTick();
@@ -355,15 +356,15 @@ public class SchematicTableIntegration {
 		}
 
 		// Left panel background
-		g.fill(6, 6, PANEL_W + 10, screen.height - 6, 0xD0080808);
-		g.fill(PANEL_W + 10, 6, PANEL_W + 11, screen.height - 6, 0x40FFFFFF);
+		g.fill(PanelLayout.LEFT_BG_LEFT, PanelLayout.SCREEN_MARGIN, PanelLayout.LEFT_BG_RIGHT, screen.height - PanelLayout.SCREEN_MARGIN, 0xD0080808);
+		g.fill(PanelLayout.LEFT_SEPARATOR_X, PanelLayout.SCREEN_MARGIN, PanelLayout.LEFT_SEPARATOR_X + 1, screen.height - PanelLayout.SCREEN_MARGIN, 0x40FFFFFF);
 
 		if (showUploadForm) {
-			g.drawString(mc.font, "\u00a7e\u2B06 Upload Schematic", leftX + 2, 12, 0xFFFFFF);
+			g.drawString(mc.font, "\u00a7e\u2B06 Upload Schematic", leftX + PanelLayout.LEFT_HEADER_INSET, 12, 0xFFFFFF);
 		} else {
-			g.drawString(mc.font, "\u00a7a\u2702 Local Schematics", leftX + 2, 12, 0xFFFFFF);
+			g.drawString(mc.font, "\u00a7a\u2702 Local Schematics", leftX + PanelLayout.LEFT_HEADER_INSET, 12, 0xFFFFFF);
 		}
-		g.fill(leftX, 26, leftX + PANEL_W, 27, 0x30FFFFFF);
+		g.fill(leftX, PanelLayout.HEADER_LINE_Y, leftX + PANEL_W, PanelLayout.HEADER_LINE_Y + 1, 0x30FFFFFF);
 
 		// Re-render left panel widgets on top
 		if (leftList != null) leftList.render(g, mx, my, pt);

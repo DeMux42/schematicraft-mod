@@ -1,4 +1,5 @@
 package com.schematicraft.bg2addon.client;
+import com.schematicraft.lib.client.screen.PanelLayout;
 import com.schematicraft.lib.core.SchematicEntry;
 
 import com.direwolf20.buildinggadgets2.client.screen.TemplateManagerGUI;
@@ -46,7 +47,7 @@ import java.util.UUID;
  */
 public class TemplateManagerIntegration {
     private static final Logger LOGGER = LogUtils.getLogger();
-    private static final int PANEL_W = 180;
+    private static final int PANEL_W = PanelLayout.PANEL_W;
 
     // Right panel: shared PalettePanel (cloud library)
     private static com.schematicraft.lib.client.screen.PalettePanel palettePanel;
@@ -82,7 +83,7 @@ public class TemplateManagerIntegration {
     }
 
     private static void initNoKeyWidgets(ScreenEvent.Init.Post event, TemplateManagerGUI gui, Minecraft mc) {
-        int leftX = 6;
+        int leftX = PanelLayout.LEFT_X;
         int y = 24;
         event.addListener(Button.builder(Component.literal("Set API Key"),
                 b -> mc.setScreen(new ApiKeyScreen(gui)))
@@ -93,11 +94,11 @@ public class TemplateManagerIntegration {
     }
 
     private static void initLeftPanel(ScreenEvent.Init.Post event, TemplateManagerGUI gui, Minecraft mc) {
-        int leftX = 6;
-        int y = 28; // below header + underline
+        int leftX = PanelLayout.LEFT_X;
+        int y = PanelLayout.BELOW_HEADER_Y; // below header + underline
 
         // Clipboard takes top portion, preview takes fixed 160px at bottom
-        int previewH = 160;
+        int previewH = PanelLayout.PREVIEW_H;
         int clipListH = gui.height - y - 16 - previewH;
         clipboardList = new SchematicListWidget(mc, PANEL_W, clipListH, y, leftX,
                 TemplateManagerIntegration::onClipboardClicked);
@@ -171,8 +172,8 @@ public class TemplateManagerIntegration {
 
         Minecraft mc = Minecraft.getInstance();
         GuiGraphics g = event.getGuiGraphics();
-        int leftX = 6;
-        int rightX = gui.width - PANEL_W - 6;
+        int leftX = PanelLayout.LEFT_X;
+        int rightX = PanelLayout.rightX(gui.width);
 
         // Visual grouping: subtle warm tint behind the gadget (tool) slot
         // to visually separate it from the template slot + render panel.
@@ -191,7 +192,7 @@ public class TemplateManagerIntegration {
         if (!ModConfig.hasApiKey()) {
             g.fill(6, 6, PANEL_W + 10, 70, 0xD0080808);
             g.drawString(mc.font, "\u00a7b\u2601 Schematicraft", leftX, 12, 0xFFFFFF);
-            g.fill(leftX, 26, leftX + PANEL_W, 27, 0x30FFFFFF);
+            g.fill(leftX, PanelLayout.HEADER_LINE_Y, leftX + PANEL_W, PanelLayout.HEADER_LINE_Y + 1, 0x30FFFFFF);
             return;
         }
 
@@ -200,12 +201,12 @@ public class TemplateManagerIntegration {
         g.pose().translate(0, 0, 400);
 
         // Left panel background (clipboard)
-        g.fill(6, 6, PANEL_W + 10, gui.height - 6, 0xD0080808);
-        g.fill(PANEL_W + 10, 6, PANEL_W + 11, gui.height - 6, 0x40FFFFFF);
+        g.fill(PanelLayout.LEFT_BG_LEFT, PanelLayout.SCREEN_MARGIN, PanelLayout.LEFT_BG_RIGHT, gui.height - PanelLayout.SCREEN_MARGIN, 0xD0080808);
+        g.fill(PanelLayout.LEFT_SEPARATOR_X, PanelLayout.SCREEN_MARGIN, PanelLayout.LEFT_SEPARATOR_X + 1, gui.height - PanelLayout.SCREEN_MARGIN, 0x40FFFFFF);
 
         // Left header
-        g.drawString(mc.font, "\u00a7a\u2702 Clipboard", leftX + 2, 12, 0xFFAAFFAA);
-        g.fill(leftX, 26, leftX + PANEL_W, 27, 0x30FFFFFF);
+        g.drawString(mc.font, "\u00a7a\u2702 Clipboard", leftX + PanelLayout.LEFT_HEADER_INSET, 12, 0xFFAAFFAA);
+        g.fill(leftX, PanelLayout.HEADER_LINE_Y, leftX + PANEL_W, PanelLayout.HEADER_LINE_Y + 1, 0x30FFFFFF);
 
         // Right panel: PalettePanel handles its own background and widget rendering
         int mx = event.getMouseX();

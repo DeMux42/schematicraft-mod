@@ -1,4 +1,5 @@
 package com.schematicraft.bg2addon.client.screen;
+import com.schematicraft.lib.client.screen.PanelLayout;
 import com.schematicraft.lib.core.LibraryState;
 import com.schematicraft.lib.client.screen.ApiKeyScreen;
 import com.schematicraft.lib.core.SchematicEntry;
@@ -37,7 +38,7 @@ public class EnhancedRadialMenu extends Screen {
     private final ItemStack gadgetStack;
     private int animationTime = 0;
 
-    private static final int PANEL_W = 180;
+    private static final int PANEL_W = PanelLayout.PANEL_W;
     private int leftX, rightX, panelTop, panelH;
 
     // Status
@@ -88,10 +89,10 @@ public class EnhancedRadialMenu extends Screen {
     @Override
     protected void init() {
         innerRadial.init(minecraft, width, height);
-        leftX = 6;
-        rightX = width - PANEL_W - 6;
-        panelTop = 10;
-        panelH = height - 26;
+        leftX = PanelLayout.LEFT_X;
+        rightX = PanelLayout.rightX(width);
+        panelTop = PanelLayout.CONTENT_TOP;
+        panelH = height - PanelLayout.STATUS_BAR_H - 2;
 
         // Camera mode round-trip restore
         if (pendingUploadReopen != null) {
@@ -146,7 +147,7 @@ public class EnhancedRadialMenu extends Screen {
     }
 
     private void initClipboardPanel(int y, int pw) {
-        int previewH = 160;
+        int previewH = PanelLayout.PREVIEW_H;
         int listHeight = panelH - (y - panelTop) - previewH - 14;
         clipboardList = new SchematicListWidget(minecraft, pw, listHeight, y, leftX, this::onClipboardLoad);
         addRenderableWidget(clipboardList);
@@ -454,10 +455,10 @@ public class EnhancedRadialMenu extends Screen {
     @Override
     public void render(GuiGraphics g, int mx, int my, float pt) {
         // Panel backgrounds
-        g.fill(6, panelTop - 4, PANEL_W + 10, height - 10, 0xD0080808);
-        g.fill(PANEL_W + 10, panelTop - 4, PANEL_W + 11, height - 10, 0x40FFFFFF);
-        g.fill(rightX - 5, panelTop - 4, width - 6, height - 10, 0xD0080808);
-        g.fill(rightX - 6, panelTop - 4, rightX - 5, height - 10, 0x40FFFFFF);
+        g.fill(PanelLayout.LEFT_BG_LEFT, panelTop - 4, PanelLayout.LEFT_BG_RIGHT, height - PanelLayout.SCREEN_MARGIN - 4, 0xD0080808);
+        g.fill(PanelLayout.LEFT_SEPARATOR_X, panelTop - 4, PanelLayout.LEFT_SEPARATOR_X + 1, height - PanelLayout.SCREEN_MARGIN - 4, 0x40FFFFFF);
+        g.fill(PanelLayout.rightBgLeft(width) - 2, panelTop - 4, PanelLayout.rightBgRight(width), height - PanelLayout.SCREEN_MARGIN - 4, 0xD0080808);
+        g.fill(PanelLayout.rightSeparatorX(width), panelTop - 4, PanelLayout.rightSeparatorX(width) + 1, height - PanelLayout.SCREEN_MARGIN - 4, 0x40FFFFFF);
 
         // Inner radial
         innerRadial.render(g, mx, my, pt);
@@ -470,8 +471,8 @@ public class EnhancedRadialMenu extends Screen {
             case UPLOAD_FORM -> "\u00a7e\u2B06 Save Schematic";
             case CREATE_BUNDLE -> "\u00a7e\u2795 New Bundle";
         };
-        g.drawString(font, leftHeader, leftX + 2, panelTop, 0xFFAAFFAA);
-        g.fill(leftX, panelTop + 10, leftX + PANEL_W, panelTop + 11, 0x30FFFFFF);
+        g.drawString(font, leftHeader, leftX + PanelLayout.LEFT_HEADER_INSET, panelTop, 0xFFAAFFAA);
+        g.fill(leftX, PanelLayout.HEADER_LINE_Y - PanelLayout.CONTENT_TOP + panelTop, leftX + PANEL_W, PanelLayout.HEADER_LINE_Y - PanelLayout.CONTENT_TOP + panelTop + 1, 0x30FFFFFF);
 
         // Right panel: PalettePanel renders itself
         if (palettePanel != null) {
@@ -510,7 +511,7 @@ public class EnhancedRadialMenu extends Screen {
 
         // Clipboard 3D preview
         if (leftMode == LeftMode.CLIPBOARD) {
-            int previewH = 160;
+            int previewH = PanelLayout.PREVIEW_H;
             int previewY = height - 10 - previewH - 6;
 
             // Show selected entry, or most recent copy
@@ -576,7 +577,7 @@ public class EnhancedRadialMenu extends Screen {
     public boolean mouseClicked(double mx, double my, int btn) {
         // Left-click in preview area: start drag
         if (btn == 0 && leftMode == LeftMode.CLIPBOARD && clipboardList != null) {
-            int previewH = 160;
+            int previewH = PanelLayout.PREVIEW_H;
             int previewY = height - 10 - previewH - 6;
             if (com.schematicraft.bg2addon.client.ClipboardPreviewRenderer.get()
                     .onMousePressed(mx, my, leftX, previewY, PANEL_W, previewH)) {
