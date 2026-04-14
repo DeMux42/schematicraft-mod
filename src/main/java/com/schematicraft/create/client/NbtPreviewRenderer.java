@@ -64,11 +64,12 @@ public class NbtPreviewRenderer {
     private float dragRotX = 20f, dragRotY = 0f; // user-controlled rotation during drag
     private float displayRotX = 20f, displayRotY = 180f; // what's actually rendered
 
-    private enum AnimState { INTRO, SPINNING, DRAGGING, RETURN_WAIT, RETURNING }
-    private AnimState animState = AnimState.INTRO;
+    private enum AnimState { SETTLE_WAIT, INTRO, SPINNING, DRAGGING, RETURN_WAIT, RETURNING }
+    private AnimState animState = AnimState.SETTLE_WAIT;
     private float animTimer = 0f;
     private float returnStartX, returnStartY; // rotation at start of return animation
     private float returnTargetY; // target Y rotation to return to
+    private static final float SETTLE_DELAY = 15f; // ~250ms at 60fps before intro spin starts
 
     // Drag tracking
     private boolean mouseDown = false;
@@ -104,11 +105,11 @@ public class NbtPreviewRenderer {
             buildVBOs(blocks);
             preparedFile = filePath;
 
-            // Reset animation: start 180 degrees behind, intro spin to front
+            // Reset animation: start facing front, wait before intro spin
             autoRotY = 0f;
-            displayRotY = 180f;
+            displayRotY = 0f;
             displayRotX = 20f;
-            animState = AnimState.INTRO;
+            animState = AnimState.SETTLE_WAIT;
             animTimer = 0f;
 
             return true;
@@ -307,6 +308,17 @@ public class NbtPreviewRenderer {
 
     private void updateAnimation() {
         switch (animState) {
+            case SETTLE_WAIT -> {
+                // Hold static at front, wait before starting intro spin
+                animTimer++;
+                displayRotY = 0f;
+                displayRotX = 20f;
+                if (animTimer >= SETTLE_DELAY) {
+                    animState = AnimState.INTRO;
+                    animTimer = 0f;
+                    displayRotY = 180f; // jump to back for the intro spin
+                }
+            }
             case INTRO -> {
                 // Ease-in-out from 180 degrees behind to 0 (front)
                 animTimer++;
