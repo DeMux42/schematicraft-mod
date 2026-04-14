@@ -132,6 +132,9 @@ public class SchematicTableIntegration {
 				showUploadForm = false;
 				selectedLocalFile = null;
 				uploadImages.clear();
+				bundleBtn = null;
+				uploadTitle = null;
+				uploadDesc = null;
 				mc.setScreen(screen);
 			}).bounds(leftX + PANEL_W / 2 + 1, y + 80, PANEL_W / 2 - 1, 16).build());
 		} else {
@@ -208,6 +211,9 @@ public class SchematicTableIntegration {
 		showUploadForm = false;
 		selectedLocalFile = null;
 		uploadImages.clear();
+		bundleBtn = null;
+		uploadTitle = null;
+		uploadDesc = null;
 		statusText = "\u00a7eUploading...";
 		Minecraft.getInstance().setScreen(screen);
 
@@ -353,6 +359,7 @@ public class SchematicTableIntegration {
 				statusText = "\u00a7aSaved: " + saved.getFileName();
 				statusClearAt = System.currentTimeMillis() + 4000;
 				CreateClient.SCHEMATIC_SENDER.refresh();
+				selectSchematicInTable(saved.getFileName().toString());
 				rebuildLeftList();
 			} else {
 				statusText = "\u00a7cFailed to save file";
@@ -383,6 +390,7 @@ public class SchematicTableIntegration {
 						statusText = "\u00a7aSaved: " + saved.getFileName();
 						statusClearAt = System.currentTimeMillis() + 4000;
 						CreateClient.SCHEMATIC_SENDER.refresh();
+						selectSchematicInTable(saved.getFileName().toString());
 						SchematiCraftAPIWrapper.get().submitSuccessFeedback(result.downloadId);
 						rebuildLeftList();
 						if (palettePanel != null) palettePanel.rebuildList();
@@ -404,5 +412,49 @@ public class SchematicTableIntegration {
 			});
 			return null;
 		});
+	}
+
+	/**
+	 * After saving a schematic file, select it in Create's Schematic Table.
+	 * Uses reflection to access the private schematicsArea ScrollInput and set
+	 * its state to the index of the saved file in the available schematics list.
+	 */
+	private static void selectSchematicInTable(String savedFilename) {
+		try {
+			// Strip .nbt extension for comparison since Create's list shows names without extension
+			String nameWithoutExt = savedFilename;
+			if (nameWithoutExt.endsWith(".nbt")) {
+				nameWithoutExt = nameWithoutExt.substring(0, nameWithoutExt.length() - 4);
+			}
+
+			var availableSchematics = CreateClient.SCHEMATIC_SENDER.getAvailableSchematics();
+			int targetIndex = -1;
+			for (int i = 0; i < availableSchematics.size(); i++) {
+				String entry = availableSchematics.get(i).getString();
+				if (entry.equals(nameWithoutExt) || entry.equals(savedFilename)) {
+					targetIndex = i;
+					break;
+				}
+			}
+
+			if (targetIndex < 0) return;
+
+			// Access the SchematicTableScreen's private schematicsArea field
+			Minecraft mc = Minecraft.getInstance();
+			if (!(mc.screen instanceof SchematicTableScreen screen)) return;
+
+			java.lang.reflect.Field field = SchematicTableScreen.class.getDeclaredField("schematicsArea");
+			field.setAccessible(true);
+			var scrollInput = field.get(screen);
+			if (scrollInput != null) {
+				var setStateMethod = scrollInput.getClass().getMethod("setState", int.class);
+				setStateMethod.invoke(scrollInput, targetIndex);
+				// Trigger the onChanged callback so the label updates
+				var onChangedMethod = scrollInput.getClass().getMethod("onChanged");
+				onChangedMethod.invoke(scrollInput);
+			}
+		} catch (Exception e) {
+			LOGGER.debug("Could not auto-select schematic in table: {}", e.getMessage());
+		}
 	}
 }

@@ -4,8 +4,8 @@ Access your [schematicraft.com](https://schematicraft.com) cloud schematic libra
 
 ## Supported Editors
 
-- **Building Gadgets 2** - Side panel in the Template Manager. Download to template slot, clipboard with 3D preview, upload with camera mode.
-- **Create** - Side panel in the Schematic Table. Download .nbt files to Create's schematics folder, upload local files to the cloud.
+- **Building Gadgets 2** - Full integration in both the Copy/Paste gadget radial menu (requires server-side mod) and the Template Manager (client-only, works on any server). Library, clipboard, upload, and camera mode in both.
+- **Create** - Purely client-side. Side panel in the Schematic Table for downloading and uploading. No server-side mod required.
 
 Both are optional. The mod detects which editors are installed and activates the appropriate integration.
 
