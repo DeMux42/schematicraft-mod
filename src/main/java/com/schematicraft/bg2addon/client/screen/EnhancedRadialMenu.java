@@ -526,7 +526,7 @@ public class EnhancedRadialMenu extends Screen {
             if (hoveredClipboardEntry != null) {
                 g.fill(leftX, previewY - 2, leftX + PANEL_W, previewY + previewH + 2, 0x60000000);
                 g.fill(leftX, previewY - 2, leftX + PANEL_W, previewY - 1, 0x30FFFFFF);
-                g.drawString(font, "\u00a78Preview", leftX, previewY + 2, 0x555555);
+                g.drawString(font, "\u00a78Preview", leftX + 2, previewY + 2, 0x555555);
 
                 g.flush();
                 com.schematicraft.bg2addon.client.ClipboardPreviewRenderer.get()

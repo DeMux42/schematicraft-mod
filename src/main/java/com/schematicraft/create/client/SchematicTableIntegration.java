@@ -412,7 +412,7 @@ public class SchematicTableIntegration {
 					} else {
 						previewLabel = "\u00a78" + previewLabel; // gray for table selection
 					}
-					g.drawString(mc.font, previewLabel, leftX, previewY + 2, 0x888888);
+					g.drawString(mc.font, previewLabel, leftX + 2, previewY + 2, 0x888888);
 
 					g.flush();
 					renderer.render(g, leftX, previewY + 12, PANEL_W, previewH - 14);
