@@ -179,6 +179,7 @@ public class PalettePanel {
                 String bundleName = state.getPinnedBundleName(i);
                 btn.setTooltip(net.minecraft.client.gui.components.Tooltip.create(
                         Component.literal(bundleName != null ? bundleName : "Pinned")
+                                .append(Component.literal("\n\u00a77Ctrl+" + (slot + 1) + " to switch"))
                                 .append(Component.literal("\n\u00a78Ctrl+click: clear"))
                                 .append(Component.literal("\n\u00a78Ctrl+Shift: clear all"))));
             }
@@ -196,7 +197,8 @@ public class PalettePanel {
                 })
                 .bounds(panelX + PaletteState.MAX_PINNED_SLOTS * (tabW + gap), y, tabW, tabH).build();
         homeBtn.setTooltip(net.minecraft.client.gui.components.Tooltip.create(
-                Component.literal("Home (all bundles)")));
+                Component.literal("Home (all bundles)")
+                        .append(Component.literal("\n\u00a77Ctrl+8 to switch"))));
         adder.accept(homeBtn);
         tabWidgets.add(homeBtn);
 
@@ -309,8 +311,7 @@ public class PalettePanel {
         PaletteState state = PaletteState.get();
         int totalCount = state.isHomeTab() ? countTotalSchematics() : countScopedSchematics(state);
         int shownCount = countShownSchematics(state.getFilteredResults());
-        String scopeName = state.isHomeTab() ? "" : state.getActiveBundleName() + ": ";
-        String statusLeft = scopeName + shownCount + " of " + totalCount;
+        String statusLeft = shownCount + " of " + totalCount;
         String statusRight = "\u2191\u2193 nav \u00b7 Enter load";
         int statusY = screen.height - PanelLayout.STATUS_TEXT_Y_OFFSET;
         g.drawString(mc.font, "\u00a78" + statusLeft, panelX + 2, statusY, 0x666666);

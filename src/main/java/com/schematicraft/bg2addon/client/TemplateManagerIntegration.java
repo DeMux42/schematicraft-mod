@@ -196,7 +196,7 @@ public class TemplateManagerIntegration {
             return;
         }
 
-        // Push Z level above BG2's container overlay so our panels aren't dimmed
+        // Push Z level above BG2's container overlay so left panel isn't dimmed
         g.pose().pushPose();
         g.pose().translate(0, 0, 400);
 
@@ -208,6 +208,8 @@ public class TemplateManagerIntegration {
         g.drawString(mc.font, "\u00a7a\u2702 Clipboard", leftX + PanelLayout.LEFT_HEADER_INSET, 12, 0xFFAAFFAA);
         g.fill(leftX, PanelLayout.HEADER_LINE_Y, leftX + PANEL_W, PanelLayout.HEADER_LINE_Y + 1, 0x30FFFFFF);
 
+        g.pose().popPose(); // Restore Z before PalettePanel so tooltips render correctly
+
         // Right panel: PalettePanel handles its own background and widget rendering
         int mx = event.getMouseX();
         int my = event.getMouseY();
@@ -215,6 +217,10 @@ public class TemplateManagerIntegration {
         if (palettePanel != null) {
             palettePanel.render(g, gui, mx, my, pt);
         }
+
+        // Re-push Z for left panel content
+        g.pose().pushPose();
+        g.pose().translate(0, 0, 400);
 
         // Status text above hotbar area
         if (!statusText.isEmpty()) {
