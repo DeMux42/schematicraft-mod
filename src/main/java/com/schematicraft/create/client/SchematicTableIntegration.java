@@ -92,16 +92,17 @@ public class SchematicTableIntegration {
 		int y = 10;
 
 		if (showUploadForm && selectedLocalFile != null) {
-			// Upload form
+			// Upload form (starts below the header underline at y=22)
 			String fileName = selectedLocalFile.getFileName().toString().replace(".nbt", "");
+			int fy = 24; // form start Y, below header
 
-			uploadTitle = new EditBox(mc.font, leftX, y + 4, PANEL_W, 14, Component.literal(""));
+			uploadTitle = new EditBox(mc.font, leftX, fy, PANEL_W, 14, Component.literal(""));
 			uploadTitle.setHint(Component.literal("Title"));
 			uploadTitle.setMaxLength(200);
 			uploadTitle.setValue(fileName);
 			event.addListener(uploadTitle);
 
-			uploadDesc = new EditBox(mc.font, leftX, y + 22, PANEL_W, 14, Component.literal(""));
+			uploadDesc = new EditBox(mc.font, leftX, fy + 18, PANEL_W, 14, Component.literal(""));
 			uploadDesc.setHint(Component.literal("Description"));
 			uploadDesc.setMaxLength(500);
 			event.addListener(uploadDesc);
@@ -112,7 +113,7 @@ public class SchematicTableIntegration {
 			bundleBtn = Button.builder(Component.literal("Bundle: " + bl), b -> {
 				selectedBundleIndex = (selectedBundleIndex + 1) % opts.size();
 				mc.setScreen(screen);
-			}).bounds(leftX, y + 40, PANEL_W, 14).build();
+			}).bounds(leftX, fy + 36, PANEL_W, 14).build();
 			event.addListener(bundleBtn);
 
 			// Screenshots button
@@ -123,11 +124,11 @@ public class SchematicTableIntegration {
 				CameraMode.start(uploadImages, () ->
 					Minecraft.getInstance().execute(() -> mc.setScreen(screen)));
 				mc.setScreen(null);
-			}).bounds(leftX, y + 58, PANEL_W, 16).build());
+			}).bounds(leftX, fy + 54, PANEL_W, 16).build());
 
 			// Upload + Cancel
 			event.addListener(Button.builder(Component.literal("\u00a7aUpload"), b -> doUpload(screen))
-				.bounds(leftX, y + 80, PANEL_W / 2 - 1, 16).build());
+				.bounds(leftX, fy + 76, PANEL_W / 2 - 1, 16).build());
 			event.addListener(Button.builder(Component.literal("Cancel"), b -> {
 				showUploadForm = false;
 				selectedLocalFile = null;
@@ -136,7 +137,7 @@ public class SchematicTableIntegration {
 				uploadTitle = null;
 				uploadDesc = null;
 				mc.setScreen(screen);
-			}).bounds(leftX + PANEL_W / 2 + 1, y + 80, PANEL_W / 2 - 1, 16).build());
+			}).bounds(leftX + PANEL_W / 2 + 1, fy + 76, PANEL_W / 2 - 1, 16).build());
 		} else {
 			// Local schematics list
 			int listH = screen.height - y - 16;
@@ -328,7 +329,7 @@ public class SchematicTableIntegration {
 		if (showUploadForm) {
 			g.drawString(mc.font, "\u00a7e\u2B06 Upload Schematic", leftX, 12, 0xFFFFFF);
 		} else {
-			g.drawString(mc.font, "\u00a7a\u2702 Local Files", leftX, 12, 0xFFFFFF);
+			g.drawString(mc.font, "\u00a7a\u2702 Local Schematics", leftX, 12, 0xFFFFFF);
 		}
 		g.fill(leftX, 20, leftX + PANEL_W, 21, 0x30FFFFFF);
 
