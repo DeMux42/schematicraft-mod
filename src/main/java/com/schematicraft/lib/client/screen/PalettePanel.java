@@ -77,7 +77,7 @@ public class PalettePanel {
             initialized = true;
         }
 
-        panelX = (side == Side.RIGHT) ? screen.width - PANEL_W - 6 : 4;
+        panelX = (side == Side.RIGHT) ? screen.width - PANEL_W - 6 : 6;
         int y = 10;
 
         // Header: brand link + logout
@@ -278,7 +278,7 @@ public class PalettePanel {
 
         // Panel background
         int bgLeft = (side == Side.RIGHT) ? panelX - 4 : 0;
-        int bgRight = (side == Side.RIGHT) ? screen.width : PANEL_W + 8;
+        int bgRight = (side == Side.RIGHT) ? screen.width : PANEL_W + 10;
         g.fill(bgLeft, 6, bgRight, screen.height - 6, 0xD0080808);
         // Edge separator
         if (side == Side.RIGHT) {

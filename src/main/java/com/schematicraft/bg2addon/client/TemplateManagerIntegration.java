@@ -82,7 +82,7 @@ public class TemplateManagerIntegration {
     }
 
     private static void initNoKeyWidgets(ScreenEvent.Init.Post event, TemplateManagerGUI gui, Minecraft mc) {
-        int leftX = 4;
+        int leftX = 6;
         int y = 24;
         event.addListener(Button.builder(Component.literal("Set API Key"),
                 b -> mc.setScreen(new ApiKeyScreen(gui)))
@@ -93,7 +93,7 @@ public class TemplateManagerIntegration {
     }
 
     private static void initLeftPanel(ScreenEvent.Init.Post event, TemplateManagerGUI gui, Minecraft mc) {
-        int leftX = 4;
+        int leftX = 6;
         int y = 28; // below header + underline
 
         // Clipboard takes top half, preview takes bottom half
@@ -147,8 +147,8 @@ public class TemplateManagerIntegration {
 
         Minecraft mc = Minecraft.getInstance();
         GuiGraphics g = event.getGuiGraphics();
-        int leftX = 4;
-        int rightX = gui.width - PANEL_W - 4;
+        int leftX = 6;
+        int rightX = gui.width - PANEL_W - 6;
 
         // Visual grouping: subtle warm tint behind the gadget (tool) slot
         // to visually separate it from the template slot + render panel.
@@ -165,15 +165,15 @@ public class TemplateManagerIntegration {
         g.fill(hx1 + 2, hy2 - 1, hx2, hy2, hc);
 
         if (!ModConfig.hasApiKey()) {
-            g.fill(0, 6, PANEL_W + 8, 70, 0xD0080808);
+            g.fill(0, 6, PANEL_W + 10, 70, 0xD0080808);
             g.drawString(mc.font, "\u00a7b\u2601 Schematicraft", leftX, 12, 0xFFFFFF);
             g.fill(leftX, 26, leftX + PANEL_W, 27, 0x30FFFFFF);
             return;
         }
 
         // Left panel background (clipboard)
-        g.fill(0, 6, PANEL_W + 8, gui.height - 6, 0xD0080808);
-        g.fill(PANEL_W + 8, 6, PANEL_W + 9, gui.height - 6, 0x40FFFFFF);
+        g.fill(0, 6, PANEL_W + 10, gui.height - 6, 0xD0080808);
+        g.fill(PANEL_W + 10, 6, PANEL_W + 11, gui.height - 6, 0x40FFFFFF);
 
         // Left header
         g.drawString(mc.font, "\u00a7a\u2702 Clipboard", leftX, 12, 0xFFAAFFAA);

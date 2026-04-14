@@ -92,7 +92,7 @@ public class SchematicTableIntegration {
 	}
 
 	private static void initLeftPanel(ScreenEvent.Init.Post event, SchematicTableScreen screen, Minecraft mc) {
-		int leftX = 4;
+		int leftX = 6;
 
 		if (showUploadForm && selectedLocalFile != null) {
 			// Upload form (starts below the header underline)
@@ -316,7 +316,7 @@ public class SchematicTableIntegration {
 
 		Minecraft mc = Minecraft.getInstance();
 		GuiGraphics g = event.getGuiGraphics();
-		int leftX = 4;
+		int leftX = 6;
 		int mx = event.getMouseX();
 		int my = event.getMouseY();
 		float pt = event.getPartialTick();
@@ -327,8 +327,8 @@ public class SchematicTableIntegration {
 		}
 
 		// Left panel background
-		g.fill(0, 6, PANEL_W + 8, screen.height - 6, 0xD0080808);
-		g.fill(PANEL_W + 8, 6, PANEL_W + 9, screen.height - 6, 0x40FFFFFF);
+		g.fill(0, 6, PANEL_W + 10, screen.height - 6, 0xD0080808);
+		g.fill(PANEL_W + 10, 6, PANEL_W + 11, screen.height - 6, 0x40FFFFFF);
 
 		if (showUploadForm) {
 			g.drawString(mc.font, "\u00a7e\u2B06 Upload Schematic", leftX, 12, 0xFFFFFF);
