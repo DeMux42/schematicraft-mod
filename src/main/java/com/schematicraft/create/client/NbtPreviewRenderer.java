@@ -105,9 +105,9 @@ public class NbtPreviewRenderer {
             buildVBOs(blocks);
             preparedFile = filePath;
 
-            // Reset animation: start facing front, wait before intro spin
+            // Reset animation: start facing back (180), hold static during settle
             autoRotY = 0f;
-            displayRotY = 0f;
+            displayRotY = 180f;
             displayRotX = 20f;
             animState = AnimState.SETTLE_WAIT;
             animTimer = 0f;
@@ -309,14 +309,14 @@ public class NbtPreviewRenderer {
     private void updateAnimation() {
         switch (animState) {
             case SETTLE_WAIT -> {
-                // Hold static at front, wait before starting intro spin
+                // Hold static at 180 (back), wait before starting intro spin
                 animTimer++;
-                displayRotY = 0f;
+                displayRotY = 180f;
                 displayRotX = 20f;
                 if (animTimer >= SETTLE_DELAY) {
                     animState = AnimState.INTRO;
                     animTimer = 0f;
-                    displayRotY = 180f; // jump to back for the intro spin
+                    // Already at 180, intro will ease to 0
                 }
             }
             case INTRO -> {

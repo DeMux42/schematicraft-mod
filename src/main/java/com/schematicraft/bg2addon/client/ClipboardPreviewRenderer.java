@@ -38,13 +38,31 @@ public class ClipboardPreviewRenderer {
     private UUID preparedUuid = null;
     private Map<RenderType, VertexBuffer> vertexBuffers = null;
 
-    private float rotationAngle = 0f;
-
     /** Midpoint of the current build for centering */
     private float midX, midY, midZ;
 
     /** Max extent for camera distance calculation */
     private float maxExtent;
+
+    // Animation state (same system as NbtPreviewRenderer)
+    private static final float SPIN_SPEED = 0.4f;
+    private static final float INTRO_DURATION = 40f;
+    private static final float SETTLE_DELAY = 15f;
+    private static final float RETURN_DELAY = 60f;
+    private static final float RETURN_DURATION = 30f;
+
+    private float autoRotY = 0f;
+    private float displayRotX = 20f, displayRotY = 180f;
+    private float dragRotX = 20f, dragRotY = 0f;
+
+    private enum AnimState { SETTLE_WAIT, INTRO, SPINNING, DRAGGING, RETURN_WAIT, RETURNING }
+    private AnimState animState = AnimState.SETTLE_WAIT;
+    private float animTimer = 0f;
+    private float returnStartX, returnStartY, returnTargetY;
+
+    private boolean mouseDown = false;
+    private double dragStartMX, dragStartMY;
+    private float dragStartRotX, dragStartRotY;
 
     private ClipboardPreviewRenderer() {}
 
@@ -110,6 +128,13 @@ public class ClipboardPreviewRenderer {
             this.vertexBuffers = vertexBuffers;
             preparedUuid = uuid;
 
+            // Reset animation
+            autoRotY = 0f;
+            displayRotY = 180f;
+            displayRotX = 20f;
+            animState = AnimState.SETTLE_WAIT;
+            animTimer = 0f;
+
         } catch (Exception e) {
             SchematiCraftMod.LOGGER.debug("Failed to prepare preview for {}: {}", uuid, e.getMessage());
             preparedUuid = null;
@@ -120,10 +145,9 @@ public class ClipboardPreviewRenderer {
         if (preparedUuid == null || vertexBuffers == null) return;
 
         Minecraft mc = Minecraft.getInstance();
+        updateAnimation();
 
         try {
-            rotationAngle += 0.5f;
-            if (rotationAngle >= 360f) rotationAngle -= 360f;
 
             double scale = mc.getWindow().getGuiScale();
             int vpX = (int) Math.round(x * scale);
@@ -144,7 +168,7 @@ public class ClipboardPreviewRenderer {
 
             float zoom = -maxExtent * 2.0f;
             ps.translate(0, 0, zoom);
-            ps.mulPose(createRotation(20f, rotationAngle, 0f));
+            ps.mulPose(createRotation(displayRotX, displayRotY, 0f));
             ps.translate(-midX, -midY, -midZ);
 
             RenderSystem.applyModelViewMatrix();
@@ -174,6 +198,113 @@ public class ClipboardPreviewRenderer {
             RenderSystem.viewport(0, 0, mc.getWindow().getWidth(), mc.getWindow().getHeight());
             RenderSystem.restoreProjectionMatrix();
         }
+    }
+
+    private void updateAnimation() {
+        switch (animState) {
+            case SETTLE_WAIT -> {
+                animTimer++;
+                displayRotY = 180f;
+                displayRotX = 20f;
+                if (animTimer >= SETTLE_DELAY) {
+                    animState = AnimState.INTRO;
+                    animTimer = 0f;
+                }
+            }
+            case INTRO -> {
+                animTimer++;
+                float t = Math.min(animTimer / INTRO_DURATION, 1f);
+                float eased = easeInOut(t);
+                displayRotY = 180f * (1f - eased);
+                displayRotX = 20f;
+                if (t >= 1f) {
+                    animState = AnimState.SPINNING;
+                    autoRotY = 0f;
+                    displayRotY = 0f;
+                }
+            }
+            case SPINNING -> {
+                autoRotY += SPIN_SPEED;
+                if (autoRotY >= 360f) autoRotY -= 360f;
+                displayRotY = autoRotY;
+                displayRotX = 20f;
+            }
+            case DRAGGING -> {
+                displayRotX = dragRotX;
+                displayRotY = dragRotY;
+                autoRotY += SPIN_SPEED;
+                if (autoRotY >= 360f) autoRotY -= 360f;
+            }
+            case RETURN_WAIT -> {
+                animTimer++;
+                displayRotX = returnStartX;
+                displayRotY = returnStartY;
+                autoRotY += SPIN_SPEED;
+                if (autoRotY >= 360f) autoRotY -= 360f;
+                returnTargetY = autoRotY;
+                if (animTimer >= RETURN_DELAY) {
+                    animState = AnimState.RETURNING;
+                    animTimer = 0f;
+                    returnTargetY = autoRotY;
+                }
+            }
+            case RETURNING -> {
+                animTimer++;
+                autoRotY += SPIN_SPEED;
+                if (autoRotY >= 360f) autoRotY -= 360f;
+                returnTargetY += SPIN_SPEED;
+                float t = Math.min(animTimer / RETURN_DURATION, 1f);
+                float eased = easeInOut(t);
+                displayRotX = returnStartX + (20f - returnStartX) * eased;
+                displayRotY = returnStartY + shortestAngleDelta(returnStartY, returnTargetY) * eased;
+                if (t >= 1f) {
+                    animState = AnimState.SPINNING;
+                    displayRotX = 20f;
+                    displayRotY = autoRotY;
+                }
+            }
+        }
+    }
+
+    public boolean onMousePressed(double mx, double my, int px, int py, int pw, int ph) {
+        if (mx >= px && mx <= px + pw && my >= py && my <= py + ph) {
+            mouseDown = true;
+            dragStartMX = mx; dragStartMY = my;
+            dragStartRotX = displayRotX; dragStartRotY = displayRotY;
+            dragRotX = displayRotX; dragRotY = displayRotY;
+            animState = AnimState.DRAGGING;
+            return true;
+        }
+        return false;
+    }
+
+    public void onMouseReleased() {
+        if (mouseDown) {
+            mouseDown = false;
+            animState = AnimState.RETURN_WAIT;
+            animTimer = 0f;
+            returnStartX = displayRotX; returnStartY = displayRotY;
+            returnTargetY = autoRotY;
+        }
+    }
+
+    public void onMouseDragged(double mx, double my) {
+        if (mouseDown) {
+            dragRotY = dragStartRotY + (float)(mx - dragStartMX) * 0.8f;
+            dragRotX = dragStartRotX + (float)(my - dragStartMY) * 0.8f;
+            dragRotX = Math.max(-80f, Math.min(80f, dragRotX));
+        }
+    }
+
+    private static float easeInOut(float t) {
+        return (float)(0.5 - 0.5 * Math.cos(t * Math.PI));
+    }
+
+    private static float shortestAngleDelta(float from, float to) {
+        float delta = (to - from) % 360f;
+        if (delta > 180f) delta -= 360f;
+        if (delta < -180f) delta += 360f;
+        return delta;
     }
 
     private static org.joml.Quaternionf createRotation(float xDeg, float yDeg, float zDeg) {
