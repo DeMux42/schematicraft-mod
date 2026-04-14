@@ -1,7 +1,6 @@
 package com.schematicraft.bg2addon.client.screen;
 import com.schematicraft.lib.core.LibraryState;
 import com.schematicraft.lib.client.screen.ApiKeyScreen;
-import com.schematicraft.lib.core.ApiJsonParser;
 import com.schematicraft.lib.core.SchematicEntry;
 import com.schematicraft.lib.core.BundleEntry;
 
@@ -38,28 +37,26 @@ public class EnhancedRadialMenu extends Screen {
     private final ItemStack gadgetStack;
     private int animationTime = 0;
 
-    private static final int PANEL_W = 160;
+    private static final int PANEL_W = 170;
     private int leftX, rightX, panelTop, panelH;
 
-    // Left panel
-    private enum LeftTab { LIBRARY, SEARCH }
-    private LeftTab leftTab = LeftTab.LIBRARY;
-    private SchematicListWidget leftList;
-    private EditBox searchField;
-    private boolean searchLoading = false;
+    // Status
     private String statusText = "";
-    private long statusClearAt = 0; // Auto-clear status text after this timestamp
+    private long statusClearAt = 0;
 
-    // Right panel modes
-    private enum RightMode { CLIPBOARD, UPLOAD_FORM, CREATE_BUNDLE }
-    private RightMode rightMode = RightMode.CLIPBOARD;
+    // Left panel modes (clipboard/upload - BG2-specific)
+    private enum LeftMode { CLIPBOARD, UPLOAD_FORM, CREATE_BUNDLE }
+    private LeftMode leftMode = LeftMode.CLIPBOARD;
+
+    // Right panel: PalettePanel (shared cloud library)
+    private com.schematicraft.lib.client.screen.PalettePanel palettePanel;
 
     // Clipboard
     private SchematicListWidget clipboardList;
     private ClipboardEntry hoveredClipboardEntry = null;
-    private ClipboardEntry selectedPreviewEntry = null; // Explicitly selected by click
+    private ClipboardEntry selectedPreviewEntry = null;
 
-    // Upload form fields (rendered in right panel)
+    // Upload form fields (rendered in left panel)
     private ClipboardEntry uploadTarget = null;
     private EditBox uploadTitle;
     private EditBox uploadDesc;
@@ -69,10 +66,6 @@ public class EnhancedRadialMenu extends Screen {
     // Create bundle field
     private EditBox bundleNameField;
     private Button bundleButton;
-
-    // Search debounce
-    private long lastSearchTime = 0;
-    private String pendingSearch = null;
 
     // Toggle
     private boolean gWasDown = true;
@@ -95,7 +88,6 @@ public class EnhancedRadialMenu extends Screen {
     @Override
     protected void init() {
         innerRadial.init(minecraft, width, height);
-
         leftX = 4;
         rightX = width - PANEL_W - 4;
         panelTop = 10;
@@ -104,185 +96,49 @@ public class EnhancedRadialMenu extends Screen {
         // Camera mode round-trip restore
         if (pendingUploadReopen != null) {
             uploadTarget = pendingUploadReopen;
-            rightMode = RightMode.UPLOAD_FORM;
+            leftMode = LeftMode.UPLOAD_FORM;
             uploadImages.addAll(pendingUploadImages);
             selectedBundleIndex = pendingBundleIndex;
             pendingUploadReopen = null;
             pendingUploadImages = null;
         }
 
+        // Left panel: clipboard/upload (BG2-specific)
         initLeftPanel();
-        initRightPanel();
 
-        if (!state.isLibraryLoaded() && !state.isLibraryLoading() && ModConfig.hasApiKey()) {
-            SchematiCraftAPIWrapper.get().loadLibrary().thenRun(() ->
-                    Minecraft.getInstance().execute(this::rebuildLeftList));
+        // Right panel: PalettePanel (cloud library)
+        if (ModConfig.hasApiKey()) {
+            palettePanel = new com.schematicraft.lib.client.screen.PalettePanel(
+                    this::onPaletteSchematicClicked,
+                    com.schematicraft.lib.client.screen.PalettePanel.Side.RIGHT);
+            palettePanel.initDirect(w -> addRenderableWidget((net.minecraft.client.gui.components.AbstractWidget) w), this);
+        } else {
+            // No API key: show setup buttons on the right
+            addRenderableWidget(Button.builder(Component.literal("\u00a7b\u2601 Schematicraft"),
+                    b -> net.minecraft.Util.getPlatform().openUri("https://www.schematicraft.com"))
+                    .bounds(rightX, panelTop, PANEL_W - 14, 12).build());
+            addRenderableWidget(Button.builder(Component.literal("Set API Key"),
+                    b -> minecraft.setScreen(new ApiKeyScreen(this)))
+                    .bounds(rightX, panelTop + 16, PANEL_W, 16).build());
+            addRenderableWidget(Button.builder(Component.literal("\u00a79Get key at schematicraft.com"),
+                    b -> net.minecraft.Util.getPlatform().openUri("https://www.schematicraft.com/account#ingame-api-keys"))
+                    .bounds(rightX, panelTop + 36, PANEL_W, 16).build());
         }
 
-        rebuildLeftList();
-
-        if (rightMode == RightMode.UPLOAD_FORM && pendingUploadTitle != null) {
+        if (leftMode == LeftMode.UPLOAD_FORM && pendingUploadTitle != null) {
             if (uploadTitle != null) uploadTitle.setValue(pendingUploadTitle);
             if (uploadDesc != null && pendingUploadDesc != null) uploadDesc.setValue(pendingUploadDesc);
             pendingUploadTitle = null;
             pendingUploadDesc = null;
         }
-
-        // Auto-focus title field when upload form is shown
-        if (rightMode == RightMode.UPLOAD_FORM && uploadTitle != null) {
-            setFocused(uploadTitle);
-        }
-        // Auto-focus bundle name field when create bundle form is shown
-        if (rightMode == RightMode.CREATE_BUNDLE && bundleNameField != null) {
-            setFocused(bundleNameField);
-        }
+        if (leftMode == LeftMode.UPLOAD_FORM && uploadTitle != null) setFocused(uploadTitle);
+        if (leftMode == LeftMode.CREATE_BUNDLE && bundleNameField != null) setFocused(bundleNameField);
     }
-
 
     private void initLeftPanel() {
-        int y = panelTop;
-
-        // Header: clickable "Schematicraft" link + logout button
-        addRenderableWidget(Button.builder(Component.literal("\u00a7b\u2601 Schematicraft"),
-                b -> net.minecraft.Util.getPlatform().openUri("https://www.schematicraft.com"))
-                .bounds(leftX, y, PANEL_W - 14, 12).build());
-
-        if (ModConfig.hasApiKey()) {
-            addRenderableWidget(Button.builder(Component.literal("\u00a7c\u2716"),
-                    b -> {
-                        ModConfig.setApiKey("");
-                        rebuildWidgets();
-                    })
-                    .bounds(leftX + PANEL_W - 12, y, 12, 12).build());
-        }
-
-        y += 14;
-
-        if (!ModConfig.hasApiKey()) {
-            addRenderableWidget(Button.builder(Component.literal("Set API Key"),
-                    b -> minecraft.setScreen(new ApiKeyScreen(this)))
-                    .bounds(leftX, y, PANEL_W, 16).build());
-            addRenderableWidget(Button.builder(Component.literal("\u00a79Get key at schematicraft.com"),
-                    b -> net.minecraft.Util.getPlatform().openUri("https://www.schematicraft.com/account#ingame-api-keys"))
-                    .bounds(leftX, y + 20, PANEL_W, 16).build());
-            return;
-        }
-
-        Button libBtn = Button.builder(Component.literal("Library"),
-                b -> { leftTab = LeftTab.LIBRARY; rebuildWidgets(); })
-                .bounds(leftX, y, PANEL_W / 2 - 1, 14).build();
-        Button srchBtn = Button.builder(Component.literal("Search"),
-                b -> { leftTab = LeftTab.SEARCH; rebuildWidgets(); })
-                .bounds(leftX + PANEL_W / 2 + 1, y, PANEL_W / 2 - 1, 14).build();
-        libBtn.active = leftTab != LeftTab.LIBRARY;
-        srchBtn.active = leftTab != LeftTab.SEARCH;
-        addRenderableWidget(libBtn);
-        addRenderableWidget(srchBtn);
-        y += 16;
-
-        if (leftTab == LeftTab.SEARCH) {
-            searchField = new EditBox(font, leftX, y, PANEL_W, 14, Component.literal(""));
-            searchField.setHint(Component.literal("Search schematics..."));
-            searchField.setMaxLength(100);
-            searchField.setResponder(t -> { if (t.length() < 2) { rebuildLeftList(); return; } pendingSearch = t; lastSearchTime = System.currentTimeMillis(); });
-            addRenderableWidget(searchField);
-            y += 16;
-        }
-
-        leftList = new SchematicListWidget(minecraft, PANEL_W, panelH - (y - panelTop) - 14, y, leftX, this::onLeftClicked);
-        addRenderableWidget(leftList);
-    }
-
-    private void rebuildLeftList() {
-        if (leftList == null) return;
-        leftList.clearEntries();
-        if (!ModConfig.hasApiKey()) return;
-
-        if (leftTab == LeftTab.LIBRARY) {
-            if (state.isLibraryLoading()) { leftList.addEntry(new SchematicListWidget.MessageEntry(leftList, "Loading...")); return; }
-            if (state.getLibraryError() != null) { leftList.addEntry(new SchematicListWidget.MessageEntry(leftList, state.getLibraryError())); return; }
-            for (BundleEntry b : state.getBundles()) {
-                leftList.addEntry(new SchematicListWidget.HeaderEntry(leftList, "\u00a7e" + b.name()));
-                for (SchematicEntry s : b.schematics()) {
-                    leftList.addEntry(new SchematicListWidget.SchematicEntry(leftList, s.id(),
-                            s.title() != null ? s.title() : "Untitled", "", s.thumbnailUrl()));
-                }
-            }
-            if (!state.getUnbundled().isEmpty()) {
-                leftList.addEntry(new SchematicListWidget.HeaderEntry(leftList, "\u00a77Unbundled"));
-                for (SchematicEntry s : state.getUnbundled())
-                    leftList.addEntry(new SchematicListWidget.SchematicEntry(leftList, s.id(),
-                            s.title() != null ? s.title() : "Untitled", "", s.thumbnailUrl()));
-            }
-            if (state.getBundles().isEmpty() && state.getUnbundled().isEmpty())
-                leftList.addEntry(new SchematicListWidget.MessageEntry(leftList, "Library empty"));
-        } else {
-            if (searchLoading) leftList.addEntry(new SchematicListWidget.MessageEntry(leftList, "Searching..."));
-            else if (searchField != null && searchField.getValue().length() < 2) leftList.addEntry(new SchematicListWidget.MessageEntry(leftList, "Type to search..."));
-        }
-    }
-
-    private void onLeftClicked(String id, String title) {
-        if (!ServerMode.isDirectModeAvailable()) {
-            statusText = "\u00a7eUse the Template Manager to load schematics";
-            return;
-        }
-        statusText = "Downloading...";
-        SchematiCraftAPIWrapper.get().downloadSchematic(id).thenAccept(result -> {
-            Minecraft.getInstance().execute(() -> {
-                try {
-                    byte[] data = Files.readAllBytes(result.file);
-                    Files.deleteIfExists(result.file);
-                    if (com.schematicraft.bg2addon.integration.BG2GadgetHelper.loadTemplateIntoGadget(minecraft.player, data)) {
-                        statusText = "\u00a7aLoaded: " + title;
-                        SchematiCraftAPIWrapper.get().submitSuccessFeedback(result.downloadId);
-                        onClose();
-                    } else {
-                        statusText = "\u00a7cFailed to parse template";
-                        SchematiCraftAPIWrapper.get().submitFailureFeedback(result.downloadId,
-                                "import_error_or_crash",
-                                "BG2 template parsing failed. loadTemplateIntoGadget returned false. " +
-                                "Client: schematicraft-bg2/0.1.0, MC: 1.21.1, Loader: neoforge");
-                    }
-                } catch (Exception e) {
-                    statusText = "\u00a7c" + e.getMessage();
-                    SchematiCraftAPIWrapper.get().submitFailureFeedback(result.downloadId,
-                            "import_error_or_crash",
-                            "Exception during template load: " + e.getClass().getSimpleName() + ": " + e.getMessage() +
-                            ". Client: schematicraft-bg2/0.1.0, MC: 1.21.1, Loader: neoforge");
-                }
-            });
-        }).exceptionally(ex -> {
-            Minecraft.getInstance().execute(() -> {
-                Throwable c = ex;
-                while (c.getCause() != null) c = c.getCause();
-                String errorMsg = c.getMessage() != null ? c.getMessage() : "Unknown error";
-                statusText = "\u00a7c" + errorMsg;
-
-                String category = "other";
-                if (errorMsg.contains("analysis") || errorMsg.contains("pending")) {
-                    category = "other";
-                } else if (errorMsg.contains("quota") || errorMsg.contains("Quota")) {
-                    category = "other";
-                } else if (errorMsg.contains("HTTP 4") || errorMsg.contains("HTTP 5")) {
-                    category = "file_seems_corrupt";
-                } else if (errorMsg.contains("convert") || errorMsg.contains("format")) {
-                    category = "import_error_or_crash";
-                }
-
-                SchematiCraftMod.LOGGER.warn("Download failed for schematic {}: {}", id, errorMsg);
-                statusClearAt = System.currentTimeMillis() + 4000;
-            });
-            return null;
-        });
-    }
-
-
-    private void initRightPanel() {
         int y = panelTop + 14;
         int pw = PANEL_W;
-
-        switch (rightMode) {
+        switch (leftMode) {
             case CLIPBOARD -> initClipboardPanel(y, pw);
             case UPLOAD_FORM -> initUploadFormPanel(y, pw);
             case CREATE_BUNDLE -> initCreateBundlePanel(y, pw);
@@ -291,7 +147,7 @@ public class EnhancedRadialMenu extends Screen {
 
     private void initClipboardPanel(int y, int pw) {
         int listHeight = (panelH - 28) / 2;
-        clipboardList = new SchematicListWidget(minecraft, pw, listHeight, y, rightX, this::onClipboardLoad);
+        clipboardList = new SchematicListWidget(minecraft, pw, listHeight, y, leftX, this::onClipboardLoad);
         addRenderableWidget(clipboardList);
         rebuildClipboardList();
     }
@@ -351,7 +207,7 @@ public class EnhancedRadialMenu extends Screen {
         } else {
             selectedBundleIndex = 0;
         }
-        rightMode = RightMode.UPLOAD_FORM;
+        leftMode = LeftMode.UPLOAD_FORM;
         rebuildWidgets();
     }
 
@@ -362,9 +218,55 @@ public class EnhancedRadialMenu extends Screen {
         }
     }
 
+    private void onPaletteSchematicClicked(String id, String title) {
+        if (!ServerMode.isDirectModeAvailable()) {
+            statusText = "\u00a7eUse the Template Manager to load schematics";
+            return;
+        }
+        // Check file cache first
+        com.schematicraft.lib.core.SchematicFileCache cache = com.schematicraft.lib.core.SchematicFileCache.get();
+        byte[] cached = cache.readCached(id);
+        if (cached != null) {
+            if (com.schematicraft.bg2addon.integration.BG2GadgetHelper.loadTemplateIntoGadget(minecraft.player, cached)) {
+                statusText = "\u00a7aLoaded: " + title;
+                onClose();
+            } else {
+                statusText = "\u00a7cFailed to parse template";
+            }
+            return;
+        }
+        statusText = "Downloading...";
+        SchematiCraftAPIWrapper.get().downloadSchematic(id).thenAccept(result -> {
+            Minecraft.getInstance().execute(() -> {
+                try {
+                    byte[] data = Files.readAllBytes(result.file);
+                    cache.store(id, "json", data);
+                    Files.deleteIfExists(result.file);
+                    if (com.schematicraft.bg2addon.integration.BG2GadgetHelper.loadTemplateIntoGadget(minecraft.player, data)) {
+                        statusText = "\u00a7aLoaded: " + title;
+                        SchematiCraftAPIWrapper.get().submitSuccessFeedback(result.downloadId);
+                        if (palettePanel != null) palettePanel.rebuildList();
+                        onClose();
+                    } else {
+                        statusText = "\u00a7cFailed to parse template";
+                    }
+                } catch (Exception e) {
+                    statusText = "\u00a7c" + e.getMessage();
+                }
+            });
+        }).exceptionally(ex -> {
+            Minecraft.getInstance().execute(() -> {
+                Throwable c = ex;
+                while (c.getCause() != null) c = c.getCause();
+                statusText = "\u00a7c" + (c.getMessage() != null ? c.getMessage() : "Unknown error");
+                statusClearAt = System.currentTimeMillis() + 4000;
+            });
+            return null;
+        });
+    }
 
     private void initUploadFormPanel(int y, int pw) {
-        int x = rightX;
+        int x = leftX;
 
         uploadTitle = new EditBox(font, x, y + 4, pw, 14, Component.literal(""));
         uploadTitle.setHint(Component.literal("Title (required)"));
@@ -390,7 +292,7 @@ public class EnhancedRadialMenu extends Screen {
         addRenderableWidget(Button.builder(Component.literal("+ New Bundle"), b -> {
             pendingUploadTitle = uploadTitle != null ? uploadTitle.getValue() : null;
             pendingUploadDesc = uploadDesc != null ? uploadDesc.getValue() : null;
-            rightMode = RightMode.CREATE_BUNDLE;
+            leftMode = LeftMode.CREATE_BUNDLE;
             rebuildWidgets();
         }).bounds(x, y + 58, pw / 2 - 1, 14).build());
 
@@ -410,7 +312,6 @@ public class EnhancedRadialMenu extends Screen {
         }).bounds(x, y + 78, pw, 18).build());
 
         // Reserve space for image thumbnails (wraps to multiple rows if needed)
-        // Must match render positions: label at (y+114-2), thumbs at (y+114+10)
         int imageStripY = y + 102;
         if (!uploadImages.isEmpty()) {
             for (int i = 0; i < uploadImages.size(); i++) {
@@ -421,7 +322,6 @@ public class EnhancedRadialMenu extends Screen {
             int thumbW = (int)(thumbH * 16.0 / 9.0);
             int thumbsPerRow = Math.max(1, pw / (thumbW + 2));
             int rows = (uploadImages.size() + thumbsPerRow - 1) / thumbsPerRow;
-            // y+114 = label area, +10 = label height, then rows of thumbs, +8 gap
             imageStripY = y + 114 + 10 + (rows * (thumbH + 2)) + 8;
         }
 
@@ -430,7 +330,7 @@ public class EnhancedRadialMenu extends Screen {
         addRenderableWidget(saveBtn);
 
         addRenderableWidget(Button.builder(Component.literal("Cancel"), b -> {
-            rightMode = RightMode.CLIPBOARD;
+            leftMode = LeftMode.CLIPBOARD;
             uploadTarget = null;
             uploadImages.clear();
             rebuildWidgets();
@@ -461,7 +361,7 @@ public class EnhancedRadialMenu extends Screen {
 
         uploadTarget.setTitle(title);
         uploadTarget.setUploadedId("pending");
-        rightMode = RightMode.CLIPBOARD;
+        leftMode = LeftMode.CLIPBOARD;
         ClipboardEntry savedTarget = uploadTarget;
         uploadTarget = null;
         uploadImages.clear();
@@ -478,8 +378,10 @@ public class EnhancedRadialMenu extends Screen {
                 } else {
                     statusText = "\u00a7aUploaded!";
                 }
-                SchematiCraftAPIWrapper.get().refreshLibrary().thenRun(() ->
-                        Minecraft.getInstance().execute(this::rebuildLeftList));
+                if (palettePanel != null) {
+                    com.schematicraft.lib.core.PaletteState.get().refilter();
+                    palettePanel.rebuildList();
+                }
                 statusClearAt = System.currentTimeMillis() + 3000;
             });
         }).exceptionally(ex -> {
@@ -504,7 +406,7 @@ public class EnhancedRadialMenu extends Screen {
             final String createdBundleId = newBundleId;
 
             Minecraft.getInstance().execute(() -> {
-                rightMode = RightMode.UPLOAD_FORM;
+                leftMode = LeftMode.UPLOAD_FORM;
                 SchematiCraftAPIWrapper.get().refreshLibrary().thenRun(() ->
                         Minecraft.getInstance().execute(() -> {
                             if (createdBundleId != null) {
@@ -526,7 +428,7 @@ public class EnhancedRadialMenu extends Screen {
     }
 
     private void initCreateBundlePanel(int y, int pw) {
-        int x = rightX;
+        int x = leftX;
 
         bundleNameField = new EditBox(font, x, y + 4, pw, 14, Component.literal(""));
         bundleNameField.setHint(Component.literal("Bundle name"));
@@ -543,11 +445,10 @@ public class EnhancedRadialMenu extends Screen {
         addRenderableWidget(createBtn);
 
         addRenderableWidget(Button.builder(Component.literal("Cancel"), b -> {
-            rightMode = RightMode.UPLOAD_FORM;
+            leftMode = LeftMode.UPLOAD_FORM;
             rebuildWidgets();
         }).bounds(x + pw / 2 + 1, y + 24, pw / 2 - 1, 16).build());
     }
-
 
     @Override
     public void render(GuiGraphics g, int mx, int my, float pt) {
@@ -562,31 +463,36 @@ public class EnhancedRadialMenu extends Screen {
 
         super.render(g, mx, my, pt);
 
-        // Headers
-        // Left panel underline (header is now a button)
-        g.fill(leftX, panelTop + 10, leftX + PANEL_W, panelTop + 11, 0x30FFFFFF);
-
-        String rightHeader = switch (rightMode) {
+        // Left header (clipboard/upload)
+        String leftHeader = switch (leftMode) {
             case CLIPBOARD -> "\u00a7a\u2702 Clipboard";
             case UPLOAD_FORM -> "\u00a7e\u2B06 Save Schematic";
             case CREATE_BUNDLE -> "\u00a7e\u2795 New Bundle";
         };
-        g.drawString(font, rightHeader, rightX, panelTop, 0xFFAAFFAA);
-        g.fill(rightX, panelTop + 10, rightX + PANEL_W, panelTop + 11, 0x30FFFFFF);
+        g.drawString(font, leftHeader, leftX, panelTop, 0xFFAAFFAA);
+        g.fill(leftX, panelTop + 10, leftX + PANEL_W, panelTop + 11, 0x30FFFFFF);
+
+        // Right panel: PalettePanel renders itself
+        if (palettePanel != null) {
+            palettePanel.render(g, this, mx, my, pt);
+        } else {
+            // No API key state
+            g.fill(rightX, panelTop + 10, rightX + PANEL_W, panelTop + 11, 0x30FFFFFF);
+        }
 
         // Upload form image thumbnails (wraps to multiple rows)
-        if (rightMode == RightMode.UPLOAD_FORM && !uploadImages.isEmpty()) {
+        if (leftMode == LeftMode.UPLOAD_FORM && !uploadImages.isEmpty()) {
             int thumbStartY = panelTop + 14 + 114;
             int thumbH = 14;
             int thumbW = (int)(thumbH * 16.0 / 9.0);
             int thumbsPerRow = Math.max(1, PANEL_W / (thumbW + 2));
-            int thumbX = rightX;
+            int thumbX = leftX;
             int thumbY = thumbStartY;
-            g.drawString(font, "\u00a78" + uploadImages.size() + " screenshot" + (uploadImages.size() > 1 ? "s" : "") + ":", rightX, thumbStartY - 2, 0x666666);
+            g.drawString(font, "\u00a78" + uploadImages.size() + " screenshot" + (uploadImages.size() > 1 ? "s" : "") + ":", leftX, thumbStartY - 2, 0x666666);
             thumbY += 10;
             for (int i = 0; i < uploadImages.size(); i++) {
                 if (i > 0 && i % thumbsPerRow == 0) {
-                    thumbX = rightX;
+                    thumbX = leftX;
                     thumbY += thumbH + 2;
                 }
                 var tex = com.schematicraft.lib.client.ThumbnailCache.get()
@@ -602,7 +508,7 @@ public class EnhancedRadialMenu extends Screen {
         }
 
         // Clipboard 3D preview
-        if (rightMode == RightMode.CLIPBOARD) {
+        if (leftMode == LeftMode.CLIPBOARD) {
             int previewY = panelTop + 14 + (panelH - 28) / 2 + 4;
             int previewH = (panelH - 28) / 2 - 8;
 
@@ -617,13 +523,13 @@ public class EnhancedRadialMenu extends Screen {
             }
 
             if (hoveredClipboardEntry != null) {
-                g.fill(rightX - 2, previewY - 2, rightX + PANEL_W + 2, previewY + previewH + 2, 0x60000000);
-                g.fill(rightX - 2, previewY - 2, rightX + PANEL_W + 2, previewY - 1, 0x30FFFFFF);
-                g.drawString(font, "\u00a78Preview", rightX, previewY + 2, 0x555555);
+                g.fill(leftX - 2, previewY - 2, leftX + PANEL_W + 2, previewY + previewH + 2, 0x60000000);
+                g.fill(leftX - 2, previewY - 2, leftX + PANEL_W + 2, previewY - 1, 0x30FFFFFF);
+                g.drawString(font, "\u00a78Preview", leftX, previewY + 2, 0x555555);
 
                 g.flush();
                 com.schematicraft.bg2addon.client.ClipboardPreviewRenderer.get()
-                        .render(g, rightX, previewY, PANEL_W, previewH);
+                        .render(g, leftX, previewY, PANEL_W, previewH);
             }
         }
 
@@ -636,7 +542,6 @@ public class EnhancedRadialMenu extends Screen {
     @Override
     public void renderBackground(GuiGraphics g, int mx, int my, float pt) {}
 
-
     @Override
     public void tick() {
         // Auto-clear status text
@@ -645,26 +550,7 @@ public class EnhancedRadialMenu extends Screen {
             statusClearAt = 0;
         }
 
-        if (pendingSearch != null && System.currentTimeMillis() - lastSearchTime > 500) {
-            String q = pendingSearch; pendingSearch = null; searchLoading = true; rebuildLeftList();
-            SchematiCraftAPIWrapper.get().search(q).thenAccept(json -> {
-                Minecraft.getInstance().execute(() -> {
-                    searchLoading = false;
-                    var results = ApiJsonParser.parseSearch(json);
-                    if (leftList != null) {
-                        leftList.clearEntries();
-                        for (var r : results) { SchematicEntry s = r.schematic();
-                            leftList.addEntry(new SchematicListWidget.SchematicEntry(leftList, s.id(),
-                                    s.title() != null ? s.title() : "Untitled",
-                                    s.ownerName() != null ? s.ownerName() : "",
-                                    s.thumbnailUrl())); }
-                        if (results.isEmpty()) leftList.addEntry(new SchematicListWidget.MessageEntry(leftList, "No results"));
-                    }
-                });
-            });
-        }
-
-        if (rightMode == RightMode.CLIPBOARD) rebuildClipboardList();
+        if (leftMode == LeftMode.CLIPBOARD) rebuildClipboardList();
 
         animationTime++;
         try {
@@ -672,10 +558,10 @@ public class EnhancedRadialMenu extends Screen {
             f.setAccessible(true); f.setInt(innerRadial, animationTime);
         } catch (Exception ignored) {}
 
-        boolean anyFieldFocused = (searchField != null && searchField.isFocused())
-                || (uploadTitle != null && uploadTitle.isFocused())
+        boolean anyFieldFocused = (uploadTitle != null && uploadTitle.isFocused())
                 || (uploadDesc != null && uploadDesc.isFocused())
-                || (bundleNameField != null && bundleNameField.isFocused());
+                || (bundleNameField != null && bundleNameField.isFocused())
+                || (palettePanel != null && palettePanel.getFilterField() != null && palettePanel.getFilterField().isFocused());
 
         if (!anyFieldFocused) {
             boolean gDown = com.mojang.blaze3d.platform.InputConstants.isKeyDown(
@@ -688,7 +574,7 @@ public class EnhancedRadialMenu extends Screen {
     @Override
     public boolean mouseClicked(double mx, double my, int btn) {
         // Right-click on bundle button cycles backward
-        if (btn == 1 && bundleButton != null && rightMode == RightMode.UPLOAD_FORM
+        if (btn == 1 && bundleButton != null && leftMode == LeftMode.UPLOAD_FORM
                 && mx >= bundleButton.getX() && mx <= bundleButton.getX() + bundleButton.getWidth()
                 && my >= bundleButton.getY() && my <= bundleButton.getY() + bundleButton.getHeight()) {
             List<com.schematicraft.lib.core.LibraryState.BundleOption> opts = state.getBundleOptions();
@@ -710,7 +596,7 @@ public class EnhancedRadialMenu extends Screen {
     @Override
     public boolean mouseScrolled(double mx, double my, double scrollX, double scrollY) {
         // Scroll wheel on bundle button cycles through bundles
-        if (bundleButton != null && rightMode == RightMode.UPLOAD_FORM
+        if (bundleButton != null && leftMode == LeftMode.UPLOAD_FORM
                 && mx >= bundleButton.getX() && mx <= bundleButton.getX() + bundleButton.getWidth()
                 && my >= bundleButton.getY() && my <= bundleButton.getY() + bundleButton.getHeight()) {
             List<com.schematicraft.lib.core.LibraryState.BundleOption> opts = state.getBundleOptions();
@@ -729,15 +615,22 @@ public class EnhancedRadialMenu extends Screen {
 
     @Override
     public boolean keyPressed(int key, int scan, int mod) {
+        // Forward to palette panel filter
+        if (palettePanel != null && palettePanel.getFilterField() != null && palettePanel.getFilterField().isFocused()) {
+            if (key != 256) { // Let Esc through
+                if (palettePanel.onKeyPressed(key, scan, mod)) return true;
+            }
+        }
+
         // Two-level Esc: first back to clipboard from upload/bundle form, then close menu
         if (key == 256) { // Esc
-            if (rightMode == RightMode.CREATE_BUNDLE) {
-                rightMode = RightMode.UPLOAD_FORM;
+            if (leftMode == LeftMode.CREATE_BUNDLE) {
+                leftMode = LeftMode.UPLOAD_FORM;
                 rebuildWidgets();
                 return true;
             }
-            if (rightMode == RightMode.UPLOAD_FORM) {
-                rightMode = RightMode.CLIPBOARD;
+            if (leftMode == LeftMode.UPLOAD_FORM) {
+                leftMode = LeftMode.CLIPBOARD;
                 uploadTarget = null;
                 uploadImages.clear();
                 rebuildWidgets();
@@ -746,24 +639,21 @@ public class EnhancedRadialMenu extends Screen {
         }
 
         // Enter in title field triggers save
-        if (key == 257 && uploadTitle != null && uploadTitle.isFocused() && rightMode == RightMode.UPLOAD_FORM) {
+        if (key == 257 && uploadTitle != null && uploadTitle.isFocused() && leftMode == LeftMode.UPLOAD_FORM) {
             doUpload();
             return true;
         }
 
         // Enter in bundle name field triggers create
-        if (key == 257 && bundleNameField != null && bundleNameField.isFocused() && rightMode == RightMode.CREATE_BUNDLE) {
-            // Find and click the create button
+        if (key == 257 && bundleNameField != null && bundleNameField.isFocused() && leftMode == LeftMode.CREATE_BUNDLE) {
             String name = bundleNameField.getValue().trim();
             if (!name.isEmpty()) {
                 bundleNameField.setFocused(false);
-                // Trigger the create action directly
                 createBundleAction(name);
             }
             return true;
         }
 
-        if (searchField != null && searchField.visible && searchField.isFocused()) return super.keyPressed(key, scan, mod);
         if (uploadTitle != null && uploadTitle.isFocused()) return super.keyPressed(key, scan, mod);
         if (uploadDesc != null && uploadDesc.isFocused()) return super.keyPressed(key, scan, mod);
         if (bundleNameField != null && bundleNameField.isFocused()) return super.keyPressed(key, scan, mod);
