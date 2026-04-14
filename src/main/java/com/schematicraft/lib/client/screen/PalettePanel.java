@@ -77,7 +77,7 @@ public class PalettePanel {
                 Component.literal("\u00a7c\u2716"),
                 b -> { ModConfig.setApiKey(""); mc.setScreen(screen); })
                 .bounds(panelX + PANEL_W - 12, y, 12, 12).build());
-        y += 14;
+        y += 20; // extra spacing below header
 
         // Filter field (always on, auto-focused)
         filterField = new EditBox(mc.font, panelX, y, PANEL_W, 14, Component.literal(""));
@@ -95,8 +95,8 @@ public class PalettePanel {
         // Tab strip: pinned bundles + Home
         y = initTabStrip(event, screen, mc, panelX, y);
 
-        // Schematic list
-        int listH = screen.height - y - 16;
+        // Schematic list (leave 24px at bottom for status bar)
+        int listH = screen.height - y - 24;
         listWidget = new SchematicListWidget(mc, PANEL_W, listH, y, panelX, (id, title) -> {
             onSchematicSelected.accept(id, title);
         });
@@ -275,24 +275,24 @@ public class PalettePanel {
             g.fill(bgRight, 6, bgRight + 1, screen.height - 6, 0x40FFFFFF);
         }
 
-        // Header underline
-        g.fill(panelX, 20, panelX + PANEL_W, 21, 0x30FFFFFF);
+        // Header underline (below the header buttons)
+        g.fill(panelX, 26, panelX + PANEL_W, 27, 0x30FFFFFF);
 
         // Active tab indicator
         PaletteState state = PaletteState.get();
         if (!state.isHomeTab() && state.getActiveBundleId() != null) {
             String bundleName = state.getActiveBundleName();
-            g.drawString(mc.font, "\u00a7e" + bundleName, panelX + 2, screen.height - 26, 0xFFAA00);
+            g.drawString(mc.font, "\u00a7e" + bundleName, panelX + 2, screen.height - 22, 0xFFAA00);
         }
 
-        // Status bar
+        // Status bar (inside the panel, above the bottom edge)
         int totalCount = countTotalSchematics();
         int shownCount = countShownSchematics(state.getFilteredResults());
         String statusLeft = shownCount + " of " + totalCount;
         String statusRight = "\u2191\u2193 nav \u00b7 Enter load";
-        g.drawString(mc.font, "\u00a78" + statusLeft, panelX + 2, screen.height - 12, 0x666666);
+        g.drawString(mc.font, "\u00a78" + statusLeft, panelX + 2, screen.height - 14, 0x666666);
         int rightW = mc.font.width(statusRight);
-        g.drawString(mc.font, "\u00a78" + statusRight, panelX + PANEL_W - rightW, screen.height - 12, 0x666666);
+        g.drawString(mc.font, "\u00a78" + statusRight, panelX + PANEL_W - rightW, screen.height - 14, 0x666666);
 
         // Re-render widgets on top of panel background
         if (listWidget != null) listWidget.render(g, mouseX, mouseY, partialTick);
