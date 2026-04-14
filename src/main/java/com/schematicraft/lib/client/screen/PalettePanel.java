@@ -277,8 +277,8 @@ public class PalettePanel {
         Minecraft mc = Minecraft.getInstance();
 
         // Panel background
-        int bgLeft = (side == Side.RIGHT) ? panelX - 4 : 0;
-        int bgRight = (side == Side.RIGHT) ? screen.width : PANEL_W + 10;
+        int bgLeft = (side == Side.RIGHT) ? panelX - 4 : 2;
+        int bgRight = (side == Side.RIGHT) ? screen.width - 2 : PANEL_W + 10;
         g.fill(bgLeft, 6, bgRight, screen.height - 6, 0xD0080808);
         // Edge separator
         if (side == Side.RIGHT) {

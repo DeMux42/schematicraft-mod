@@ -453,9 +453,9 @@ public class EnhancedRadialMenu extends Screen {
     @Override
     public void render(GuiGraphics g, int mx, int my, float pt) {
         // Panel backgrounds
-        g.fill(0, panelTop - 4, PANEL_W + 10, height - 10, 0xD0080808);
+        g.fill(2, panelTop - 4, PANEL_W + 10, height - 10, 0xD0080808);
         g.fill(PANEL_W + 10, panelTop - 4, PANEL_W + 11, height - 10, 0x40FFFFFF);
-        g.fill(rightX - 5, panelTop - 4, width, height - 10, 0xD0080808);
+        g.fill(rightX - 5, panelTop - 4, width - 2, height - 10, 0xD0080808);
         g.fill(rightX - 6, panelTop - 4, rightX - 5, height - 10, 0x40FFFFFF);
 
         // Inner radial

@@ -51,8 +51,29 @@ public class NbtPreviewRenderer {
     private String preparedFile = null;
     private Map<RenderType, VertexBuffer> vertexBuffers = null;
     private float midX, midY, midZ, maxExtent;
-    private float rotationAngle = 0f;
     private int blockCount = 0;
+
+    // Animation state
+    private static final float SPIN_SPEED = 0.4f; // degrees per frame during constant rotation
+    private static final float INTRO_DURATION = 40f; // frames for the 180-degree intro spin
+    private static final float RETURN_DELAY = 60f; // frames to wait after drag release before returning
+    private static final float RETURN_DURATION = 30f; // frames for the return animation
+
+    private float autoRotY = 0f; // current auto-rotation Y angle
+    private float autoRotX = 20f; // fixed tilt
+    private float dragRotX = 20f, dragRotY = 0f; // user-controlled rotation during drag
+    private float displayRotX = 20f, displayRotY = 180f; // what's actually rendered
+
+    private enum AnimState { INTRO, SPINNING, DRAGGING, RETURN_WAIT, RETURNING }
+    private AnimState animState = AnimState.INTRO;
+    private float animTimer = 0f;
+    private float returnStartX, returnStartY; // rotation at start of return animation
+    private float returnTargetY; // target Y rotation to return to
+
+    // Drag tracking
+    private boolean mouseDown = false;
+    private double dragStartMX, dragStartMY;
+    private float dragStartRotX, dragStartRotY;
 
     private NbtPreviewRenderer() {}
 
@@ -82,6 +103,14 @@ public class NbtPreviewRenderer {
             blockCount = blocks.size();
             buildVBOs(blocks);
             preparedFile = filePath;
+
+            // Reset animation: start 180 degrees behind, intro spin to front
+            autoRotY = 0f;
+            displayRotY = 180f;
+            displayRotX = 20f;
+            animState = AnimState.INTRO;
+            animTimer = 0f;
+
             return true;
         } catch (Exception e) {
             LOGGER.debug("Failed to prepare preview for {}: {}", nbtFile.getFileName(), e.getMessage());
@@ -232,15 +261,134 @@ public class NbtPreviewRenderer {
     }
 
     /**
+     * Handle mouse press in the preview area. Returns true if consumed.
+     */
+    public boolean onMousePressed(double mx, double my, int previewX, int previewY, int previewW, int previewH) {
+        if (mx >= previewX && mx <= previewX + previewW && my >= previewY && my <= previewY + previewH) {
+            mouseDown = true;
+            dragStartMX = mx;
+            dragStartMY = my;
+            dragStartRotX = displayRotX;
+            dragStartRotY = displayRotY;
+            dragRotX = displayRotX;
+            dragRotY = displayRotY;
+            animState = AnimState.DRAGGING;
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Handle mouse release. Starts the return animation after a delay.
+     */
+    public void onMouseReleased() {
+        if (mouseDown) {
+            mouseDown = false;
+            animState = AnimState.RETURN_WAIT;
+            animTimer = 0f;
+            returnStartX = displayRotX;
+            returnStartY = displayRotY;
+            // Target: return to the current auto-rotation angle with standard tilt
+            returnTargetY = autoRotY;
+        }
+    }
+
+    /**
+     * Handle mouse drag. Updates the drag rotation.
+     */
+    public void onMouseDragged(double mx, double my) {
+        if (mouseDown) {
+            dragRotY = dragStartRotY + (float)(mx - dragStartMX) * 0.8f;
+            dragRotX = dragStartRotX + (float)(my - dragStartMY) * 0.8f;
+            // Clamp X rotation to avoid flipping
+            dragRotX = Math.max(-80f, Math.min(80f, dragRotX));
+        }
+    }
+
+    private void updateAnimation() {
+        switch (animState) {
+            case INTRO -> {
+                // Ease-in-out from 180 degrees behind to 0 (front)
+                animTimer++;
+                float t = Math.min(animTimer / INTRO_DURATION, 1f);
+                float eased = easeInOut(t);
+                displayRotY = 180f * (1f - eased);
+                displayRotX = 20f;
+                if (t >= 1f) {
+                    animState = AnimState.SPINNING;
+                    autoRotY = 0f;
+                    displayRotY = 0f;
+                }
+            }
+            case SPINNING -> {
+                autoRotY += SPIN_SPEED;
+                if (autoRotY >= 360f) autoRotY -= 360f;
+                displayRotY = autoRotY;
+                displayRotX = 20f;
+            }
+            case DRAGGING -> {
+                displayRotX = dragRotX;
+                displayRotY = dragRotY;
+                // Keep auto-rotation tracking where it would be
+                autoRotY += SPIN_SPEED;
+                if (autoRotY >= 360f) autoRotY -= 360f;
+            }
+            case RETURN_WAIT -> {
+                animTimer++;
+                // Hold the drag position during the wait
+                displayRotX = returnStartX;
+                displayRotY = returnStartY;
+                autoRotY += SPIN_SPEED;
+                if (autoRotY >= 360f) autoRotY -= 360f;
+                returnTargetY = autoRotY; // keep updating target
+                if (animTimer >= RETURN_DELAY) {
+                    animState = AnimState.RETURNING;
+                    animTimer = 0f;
+                    returnTargetY = autoRotY;
+                }
+            }
+            case RETURNING -> {
+                animTimer++;
+                autoRotY += SPIN_SPEED;
+                if (autoRotY >= 360f) autoRotY -= 360f;
+                returnTargetY += SPIN_SPEED; // target moves with auto-rotation
+
+                float t = Math.min(animTimer / RETURN_DURATION, 1f);
+                float eased = easeInOut(t);
+                displayRotX = returnStartX + (20f - returnStartX) * eased;
+                displayRotY = returnStartY + shortestAngleDelta(returnStartY, returnTargetY) * eased;
+                if (t >= 1f) {
+                    animState = AnimState.SPINNING;
+                    displayRotX = 20f;
+                    displayRotY = autoRotY;
+                }
+            }
+        }
+    }
+
+    /** Ease-in-out using a sine curve (smooth acceleration and deceleration). */
+    private static float easeInOut(float t) {
+        return (float)(0.5 - 0.5 * Math.cos(t * Math.PI));
+    }
+
+    /** Compute the shortest rotation delta between two angles (handles wrapping). */
+    private static float shortestAngleDelta(float from, float to) {
+        float delta = (to - from) % 360f;
+        if (delta > 180f) delta -= 360f;
+        if (delta < -180f) delta += 360f;
+        return delta;
+    }
+
+    /**
      * Render the prepared preview in the given screen area.
      */
     public void render(GuiGraphics g, int x, int y, int w, int h) {
         if (preparedFile == null || vertexBuffers == null) return;
 
         Minecraft mc = Minecraft.getInstance();
+        updateAnimation();
+
         try {
-            rotationAngle += 0.5f;
-            if (rotationAngle >= 360f) rotationAngle -= 360f;
 
             double scale = mc.getWindow().getGuiScale();
             int vpX = (int) Math.round(x * scale);
@@ -262,8 +410,8 @@ public class NbtPreviewRenderer {
             float zoom = -maxExtent * 1.8f;
             ps.translate(0, 0, zoom);
             ps.mulPose(new Quaternionf()
-                    .rotateX((float) Math.toRadians(25f))
-                    .rotateY((float) Math.toRadians(rotationAngle)));
+                    .rotateX((float) Math.toRadians(displayRotX))
+                    .rotateY((float) Math.toRadians(displayRotY)));
             ps.translate(-midX, -midY, -midZ);
 
             RenderSystem.applyModelViewMatrix();

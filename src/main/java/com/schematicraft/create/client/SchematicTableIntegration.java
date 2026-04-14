@@ -265,6 +265,34 @@ public class SchematicTableIntegration {
 				}
 			}
 		}
+		// Forward left-clicks to preview renderer for drag control
+		if (event.getButton() == 0 && !showUploadForm) {
+			NbtPreviewRenderer renderer = NbtPreviewRenderer.get();
+			if (renderer.getPreparedFile() != null && leftList != null) {
+				int previewY = leftList.getBottom() + 4 + 12;
+				int previewH = ((SchematicTableScreen) event.getScreen()).height - previewY - 12 - 14;
+				if (renderer.onMousePressed(event.getMouseX(), event.getMouseY(), 6, previewY, PANEL_W, previewH)) {
+					event.setCanceled(true);
+				}
+			}
+		}
+	}
+
+	@SubscribeEvent
+	public static void onMouseReleased(ScreenEvent.MouseButtonReleased.Pre event) {
+		if (!(event.getScreen() instanceof SchematicTableScreen)) return;
+		if (event.getButton() == 0) {
+			NbtPreviewRenderer.get().onMouseReleased();
+		}
+	}
+
+	@SubscribeEvent
+	public static void onMouseDragged(ScreenEvent.MouseDragged.Pre event) {
+		if (!(event.getScreen() instanceof SchematicTableScreen)) return;
+		NbtPreviewRenderer renderer = NbtPreviewRenderer.get();
+		if (renderer.getPreparedFile() != null) {
+			renderer.onMouseDragged(event.getMouseX(), event.getMouseY());
+		}
 	}
 
 	@SubscribeEvent
@@ -327,7 +355,7 @@ public class SchematicTableIntegration {
 		}
 
 		// Left panel background
-		g.fill(0, 6, PANEL_W + 10, screen.height - 6, 0xD0080808);
+		g.fill(2, 6, PANEL_W + 10, screen.height - 6, 0xD0080808);
 		g.fill(PANEL_W + 10, 6, PANEL_W + 11, screen.height - 6, 0x40FFFFFF);
 
 		if (showUploadForm) {
