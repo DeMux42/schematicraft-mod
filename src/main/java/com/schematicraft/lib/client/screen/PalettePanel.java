@@ -39,6 +39,10 @@ public class PalettePanel {
     private boolean initialized = false;
     private int panelX = PanelLayout.LEFT_X;
 
+    // Stored widget references for re-rendering on top of background
+    private final java.util.List<net.minecraft.client.gui.components.AbstractWidget> headerWidgets = new java.util.ArrayList<>();
+    private final java.util.List<net.minecraft.client.gui.components.AbstractWidget> tabWidgets = new java.util.ArrayList<>();
+
     public enum Side { LEFT, RIGHT }
     private Side side = Side.LEFT;
 
@@ -79,16 +83,23 @@ public class PalettePanel {
 
         panelX = (side == Side.RIGHT) ? PanelLayout.rightX(screen.width) : PanelLayout.LEFT_X;
         int y = PanelLayout.CONTENT_TOP;
+        headerWidgets.clear();
+        tabWidgets.clear();
 
         // Header: brand link + logout
-        adder.accept(net.minecraft.client.gui.components.Button.builder(
+        var brandBtn = net.minecraft.client.gui.components.Button.builder(
                 Component.literal("\u00a7b\u2601 Schematicraft"),
                 b -> net.minecraft.Util.getPlatform().openUri("https://www.schematicraft.com"))
-                .bounds(panelX, y, PANEL_W - PanelLayout.CLOSE_BTN_MARGIN, 12).build());
-        adder.accept(net.minecraft.client.gui.components.Button.builder(
+                .bounds(panelX, y, PANEL_W - PanelLayout.CLOSE_BTN_MARGIN, 12).build();
+        adder.accept(brandBtn);
+        headerWidgets.add(brandBtn);
+
+        var closeBtn = net.minecraft.client.gui.components.Button.builder(
                 Component.literal("\u00a7c\u2716"),
                 b -> { ModConfig.setApiKey(""); mc.setScreen(screen); })
-                .bounds(panelX + PANEL_W - PanelLayout.CLOSE_BTN_INSET, y, PanelLayout.CLOSE_BTN_W, 12).build());
+                .bounds(panelX + PANEL_W - PanelLayout.CLOSE_BTN_INSET, y, PanelLayout.CLOSE_BTN_W, 12).build();
+        adder.accept(closeBtn);
+        headerWidgets.add(closeBtn);
         y += PanelLayout.HEADER_GAP;
 
         // Filter field (always on, auto-focused)
@@ -172,6 +183,7 @@ public class PalettePanel {
                                 .append(Component.literal("\n\u00a78Ctrl+Shift: clear all"))));
             }
             adder.accept(btn);
+            tabWidgets.add(btn);
         }
 
         // Home tab (last slot)
@@ -186,6 +198,7 @@ public class PalettePanel {
         homeBtn.setTooltip(net.minecraft.client.gui.components.Tooltip.create(
                 Component.literal("Home (all bundles)")));
         adder.accept(homeBtn);
+        tabWidgets.add(homeBtn);
 
         return y + tabH + 2;
     }
@@ -304,7 +317,9 @@ public class PalettePanel {
         int rightW = mc.font.width(statusRight);
         g.drawString(mc.font, "\u00a78" + statusRight, panelX + PANEL_W - rightW, statusY, 0x666666);
 
-        // Re-render widgets on top of panel background
+        // Re-render all widgets on top of panel background
+        for (var w : headerWidgets) w.render(g, mouseX, mouseY, partialTick);
+        for (var w : tabWidgets) w.render(g, mouseX, mouseY, partialTick);
         if (listWidget != null) listWidget.render(g, mouseX, mouseY, partialTick);
         if (filterField != null) filterField.render(g, mouseX, mouseY, partialTick);
     }
