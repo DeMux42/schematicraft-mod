@@ -290,9 +290,9 @@ public class PalettePanel {
         int shownCount = countShownSchematics(state.getFilteredResults());
         String statusLeft = shownCount + " of " + totalCount;
         String statusRight = "\u2191\u2193 nav \u00b7 Enter load";
-        g.drawString(mc.font, "\u00a78" + statusLeft, panelX + 2, screen.height - 14, 0x666666);
+        g.drawString(mc.font, "\u00a78" + statusLeft, panelX + 2, screen.height - 17, 0x666666);
         int rightW = mc.font.width(statusRight);
-        g.drawString(mc.font, "\u00a78" + statusRight, panelX + PANEL_W - rightW, screen.height - 14, 0x666666);
+        g.drawString(mc.font, "\u00a78" + statusRight, panelX + PANEL_W - rightW, screen.height - 17, 0x666666);
 
         // Re-render widgets on top of panel background
         if (listWidget != null) listWidget.render(g, mouseX, mouseY, partialTick);

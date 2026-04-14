@@ -93,12 +93,11 @@ public class SchematicTableIntegration {
 
 	private static void initLeftPanel(ScreenEvent.Init.Post event, SchematicTableScreen screen, Minecraft mc) {
 		int leftX = 4;
-		int y = 10;
 
 		if (showUploadForm && selectedLocalFile != null) {
-			// Upload form (starts below the header underline at y=22)
+			// Upload form (starts below the header underline)
 			String fileName = selectedLocalFile.getFileName().toString().replace(".nbt", "");
-			int fy = 24; // form start Y, below header
+			int fy = 30; // form start Y, below header + underline + gap
 
 			uploadTitle = new EditBox(mc.font, leftX, fy, PANEL_W, 14, Component.literal(""));
 			uploadTitle.setHint(Component.literal("Title"));
@@ -144,9 +143,10 @@ public class SchematicTableIntegration {
 			}).bounds(leftX + PANEL_W / 2 + 1, fy + 76, PANEL_W / 2 - 1, 16).build());
 		} else {
 			// Local schematics list (top half, bottom half is preview)
+			int listY = 28; // below header + underline + gap
 			int previewH = 160;
-			int listH = screen.height - y - 16 - previewH;
-			leftList = new SchematicListWidget(mc, PANEL_W, listH, y, leftX,
+			int listH = screen.height - listY - 16 - previewH;
+			leftList = new SchematicListWidget(mc, PANEL_W, listH, listY, leftX,
 				SchematicTableIntegration::onLocalSchematicClicked);
 			event.addListener(leftList);
 			rebuildLeftList();
@@ -156,7 +156,6 @@ public class SchematicTableIntegration {
 	private static void rebuildLeftList() {
 		if (leftList == null) return;
 		leftList.clearEntries();
-		leftList.addEntry(new SchematicListWidget.HeaderEntry(leftList, "\u00a7eLocal Schematics"));
 		leftList.addEntry(new SchematicListWidget.MessageEntry(leftList, "Click to upload to cloud"));
 
 		List<Path> locals = SchematicFileHelper.listLocalSchematics();
@@ -336,7 +335,7 @@ public class SchematicTableIntegration {
 		} else {
 			g.drawString(mc.font, "\u00a7a\u2702 Local Schematics", leftX, 12, 0xFFFFFF);
 		}
-		g.fill(leftX, 20, leftX + PANEL_W, 21, 0x30FFFFFF);
+		g.fill(leftX, 26, leftX + PANEL_W, 27, 0x30FFFFFF);
 
 		// Re-render left panel widgets on top
 		if (leftList != null) leftList.render(g, mx, my, pt);
