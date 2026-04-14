@@ -276,10 +276,11 @@ public class PalettePanel {
     public void render(GuiGraphics g, Screen screen, int mouseX, int mouseY, float partialTick) {
         Minecraft mc = Minecraft.getInstance();
 
-        // Panel background (3px padding around content area)
-        int pad = 3;
-        int bgLeft = (side == Side.RIGHT) ? panelX - pad : panelX - pad;
-        int bgRight = (side == Side.RIGHT) ? panelX + PANEL_W + pad : panelX + PANEL_W + pad;
+        // Panel background (padding around content area)
+        int padLeft = 6;  // wider on the inward side to match visible right margin
+        int padRight = 3;
+        int bgLeft = (side == Side.RIGHT) ? panelX - padLeft : panelX - padRight;
+        int bgRight = (side == Side.RIGHT) ? panelX + PANEL_W + padRight : panelX + PANEL_W + padLeft;
         g.fill(bgLeft, 6, bgRight, screen.height - 6, 0xD0080808);
         // Edge separator (on the side facing the center of the screen)
         if (side == Side.RIGHT) {
