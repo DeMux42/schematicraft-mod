@@ -56,6 +56,10 @@ public class SchematicTableIntegration {
 	private static long statusClearAt = 0;
 	private static Button bundleBtn;
 
+	// Preview state
+	private static Path hoveredLocalFile = null;
+	private static String lastTableSelection = null;
+
 	@SubscribeEvent
 	public static void onScreenInit(ScreenEvent.Init.Post event) {
 		if (!(event.getScreen() instanceof SchematicTableScreen screen)) return;
@@ -139,8 +143,9 @@ public class SchematicTableIntegration {
 				mc.setScreen(screen);
 			}).bounds(leftX + PANEL_W / 2 + 1, fy + 76, PANEL_W / 2 - 1, 16).build());
 		} else {
-			// Local schematics list
-			int listH = screen.height - y - 16;
+			// Local schematics list (top half, bottom half is preview)
+			int previewH = 160;
+			int listH = screen.height - y - 16 - previewH;
 			leftList = new SchematicListWidget(mc, PANEL_W, listH, y, leftX,
 				SchematicTableIntegration::onLocalSchematicClicked);
 			event.addListener(leftList);
@@ -339,6 +344,54 @@ public class SchematicTableIntegration {
 		if (uploadDesc != null) uploadDesc.render(g, mx, my, pt);
 		if (bundleBtn != null) bundleBtn.render(g, mx, my, pt);
 
+		// Preview in bottom half of left panel (when not in upload form)
+		if (!showUploadForm && leftList != null) {
+			int previewY = leftList.getBottom() + 4;
+			int previewH = screen.height - previewY - 12;
+
+			if (previewH > 40) {
+				// Detect hovered local file
+				Path hoverTarget = null;
+				if (leftList.isMouseOver(mx, my)) {
+					for (var child : leftList.children()) {
+						if (child instanceof SchematicListWidget.SchematicEntry se && child.isMouseOver(mx, my)) {
+							try {
+								hoverTarget = Path.of(se.getSchematicId());
+							} catch (Exception ignored) {}
+						}
+					}
+				}
+
+				// Determine which file to preview: hover takes priority, then table selection
+				Path previewTarget = hoverTarget;
+				if (previewTarget == null) {
+					// Use Create's currently selected schematic from the table
+					previewTarget = getTableSelectedFile();
+				}
+
+				if (previewTarget != null && Files.exists(previewTarget)) {
+					NbtPreviewRenderer renderer = NbtPreviewRenderer.get();
+					renderer.prepare(previewTarget);
+
+					// Preview background
+					g.fill(leftX - 2, previewY - 2, leftX + PANEL_W + 2, previewY + previewH + 2, 0x60000000);
+					g.fill(leftX - 2, previewY - 2, leftX + PANEL_W + 2, previewY - 1, 0x30FFFFFF);
+
+					// Label
+					String previewLabel = previewTarget.getFileName().toString().replace(".nbt", "");
+					if (hoverTarget != null) {
+						previewLabel = "\u00a7e" + previewLabel; // yellow for hover
+					} else {
+						previewLabel = "\u00a78" + previewLabel; // gray for table selection
+					}
+					g.drawString(mc.font, previewLabel, leftX, previewY + 2, 0x888888);
+
+					g.flush();
+					renderer.render(g, leftX, previewY + 12, PANEL_W, previewH - 14);
+				}
+			}
+		}
+
 		// Status text
 		if (statusClearAt > 0 && System.currentTimeMillis() >= statusClearAt) {
 			statusText = "";
@@ -413,6 +466,43 @@ public class SchematicTableIntegration {
 			});
 			return null;
 		});
+	}
+
+	/**
+	 * Get the file path of the schematic currently selected in Create's table.
+	 * Reads the ScrollInput state via the available schematics list.
+	 */
+	private static Path getTableSelectedFile() {
+		try {
+			var available = CreateClient.SCHEMATIC_SENDER.getAvailableSchematics();
+			if (available.isEmpty()) return null;
+
+			// Get the current selection index from the SchematicTableScreen
+			Minecraft mc = Minecraft.getInstance();
+			if (!(mc.screen instanceof SchematicTableScreen screen)) return null;
+
+			java.lang.reflect.Field field = SchematicTableScreen.class.getDeclaredField("schematicsArea");
+			field.setAccessible(true);
+			var scrollInput = field.get(screen);
+			if (scrollInput == null) return null;
+
+			var getStateMethod = scrollInput.getClass().getMethod("getState");
+			int index = (int) getStateMethod.invoke(scrollInput);
+
+			if (index < 0 || index >= available.size()) return null;
+			String name = available.get(index).getString();
+
+			// Resolve to file path in Create's schematics folder
+			Path schematicsDir = Path.of("schematics");
+			Path file = schematicsDir.resolve(name + ".nbt");
+			if (Files.exists(file)) return file;
+			// Try without adding .nbt (in case the name already has it)
+			file = schematicsDir.resolve(name);
+			if (Files.exists(file)) return file;
+		} catch (Exception e) {
+			// Reflection failure is expected on first call or if screen changes
+		}
+		return null;
 	}
 
 	/**
