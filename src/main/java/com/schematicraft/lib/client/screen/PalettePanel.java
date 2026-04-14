@@ -80,15 +80,15 @@ public class PalettePanel {
         panelX = (side == Side.RIGHT) ? screen.width - PANEL_W - 6 : 6;
         int y = 10;
 
-        // Header: brand link + logout
+        // Header: brand link + logout (with right margin for X button)
         adder.accept(net.minecraft.client.gui.components.Button.builder(
                 Component.literal("\u00a7b\u2601 Schematicraft"),
                 b -> net.minecraft.Util.getPlatform().openUri("https://www.schematicraft.com"))
-                .bounds(panelX, y, PANEL_W - 14, 12).build());
+                .bounds(panelX, y, PANEL_W - 18, 12).build());
         adder.accept(net.minecraft.client.gui.components.Button.builder(
                 Component.literal("\u00a7c\u2716"),
                 b -> { ModConfig.setApiKey(""); mc.setScreen(screen); })
-                .bounds(panelX + PANEL_W - 12, y, 12, 12).build());
+                .bounds(panelX + PANEL_W - 14, y, 12, 12).build());
         y += 20; // extra spacing below header
 
         // Filter field (always on, auto-focused)
@@ -131,7 +131,9 @@ public class PalettePanel {
 
     private int initTabStrip(java.util.function.Consumer<net.minecraft.client.gui.components.events.GuiEventListener> adder, Screen screen, Minecraft mc, int panelX, int y) {
         PaletteState state = PaletteState.get();
-        int tabW = PANEL_W / 8;
+        int totalTabs = PaletteState.MAX_PINNED_SLOTS + 1; // 7 pinnable + 1 home
+        int gap = 1;
+        int tabW = (PANEL_W - (totalTabs - 1) * gap) / totalTabs;
         int tabH = 14;
 
         for (int i = 0; i < PaletteState.MAX_PINNED_SLOTS; i++) {
@@ -145,14 +147,12 @@ public class PalettePanel {
                     Component.literal(label),
                     b -> {
                         if (pinned && Screen.hasControlDown() && Screen.hasShiftDown()) {
-                            // Ctrl+Shift+Click: clear all pins
                             for (int s = 0; s < PaletteState.MAX_PINNED_SLOTS; s++) {
                                 state.unpinBundle(s);
                             }
                             ModConfig.setPinnedBundles(state.savePinnedToConfig());
                             mc.setScreen(screen);
                         } else if (pinned && Screen.hasControlDown()) {
-                            // Ctrl+Click: clear this pin
                             state.unpinBundle(slot);
                             ModConfig.setPinnedBundles(state.savePinnedToConfig());
                             mc.setScreen(screen);
@@ -161,7 +161,7 @@ public class PalettePanel {
                             mc.setScreen(screen);
                         }
                     })
-                    .bounds(panelX + i * (tabW + 1), y, tabW, tabH).build();
+                    .bounds(panelX + i * (tabW + gap), y, tabW, tabH).build();
             if (!pinned) btn.active = false;
             // Tooltip with bundle name and clear hints
             if (pinned) {
@@ -182,7 +182,7 @@ public class PalettePanel {
                     state.setActiveTab(PaletteState.MAX_PINNED_SLOTS);
                     mc.setScreen(screen);
                 })
-                .bounds(panelX + PaletteState.MAX_PINNED_SLOTS * (tabW + 1), y, tabW, tabH).build();
+                .bounds(panelX + PaletteState.MAX_PINNED_SLOTS * (tabW + gap), y, tabW, tabH).build();
         homeBtn.setTooltip(net.minecraft.client.gui.components.Tooltip.create(
                 Component.literal("Home (all bundles)")));
         adder.accept(homeBtn);
@@ -276,11 +276,12 @@ public class PalettePanel {
     public void render(GuiGraphics g, Screen screen, int mouseX, int mouseY, float partialTick) {
         Minecraft mc = Minecraft.getInstance();
 
-        // Panel background
-        int bgLeft = (side == Side.RIGHT) ? panelX - 4 : 6;
-        int bgRight = (side == Side.RIGHT) ? screen.width - 6 : PANEL_W + 10;
+        // Panel background (3px padding around content area)
+        int pad = 3;
+        int bgLeft = (side == Side.RIGHT) ? panelX - pad : panelX - pad;
+        int bgRight = (side == Side.RIGHT) ? panelX + PANEL_W + pad : panelX + PANEL_W + pad;
         g.fill(bgLeft, 6, bgRight, screen.height - 6, 0xD0080808);
-        // Edge separator
+        // Edge separator (on the side facing the center of the screen)
         if (side == Side.RIGHT) {
             g.fill(bgLeft - 1, 6, bgLeft, screen.height - 6, 0x40FFFFFF);
         } else {
