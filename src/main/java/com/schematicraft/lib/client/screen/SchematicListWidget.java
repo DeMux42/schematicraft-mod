@@ -26,6 +26,7 @@ public class SchematicListWidget extends ObjectSelectionList<SchematicListWidget
 
     public void clearEntries() {
         this.children().clear();
+        this.setScrollAmount(0); // Reset scroll position
     }
 
     @Override
@@ -191,16 +192,17 @@ public class SchematicListWidget extends ObjectSelectionList<SchematicListWidget
                 com.schematicraft.lib.core.PaletteState state = com.schematicraft.lib.core.PaletteState.get();
                 int existingSlot = state.getSlotForBundle(bundleId);
                 if (existingSlot >= 0) {
-                    // Already pinned: unpin it
                     state.unpinBundle(existingSlot);
                 } else {
-                    // Not pinned: pin to next empty slot
                     int slot = state.getFirstEmptySlot();
                     if (slot >= 0) {
                         state.pinBundle(slot, bundleId, bundleName);
                     }
                 }
                 com.schematicraft.lib.config.ModConfig.setPinnedBundles(state.savePinnedToConfig());
+                // Re-init the screen so the tab strip updates immediately
+                net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+                if (mc.screen != null) mc.setScreen(mc.screen);
                 return true;
             }
             return false;
