@@ -165,14 +165,14 @@ public class TemplateManagerIntegration {
         g.fill(hx1 + 2, hy2 - 1, hx2, hy2, hc);
 
         if (!ModConfig.hasApiKey()) {
-            g.fill(2, 6, PANEL_W + 10, 70, 0xD0080808);
+            g.fill(6, 6, PANEL_W + 10, 70, 0xD0080808);
             g.drawString(mc.font, "\u00a7b\u2601 Schematicraft", leftX, 12, 0xFFFFFF);
             g.fill(leftX, 26, leftX + PANEL_W, 27, 0x30FFFFFF);
             return;
         }
 
         // Left panel background (clipboard)
-        g.fill(2, 6, PANEL_W + 10, gui.height - 6, 0xD0080808);
+        g.fill(6, 6, PANEL_W + 10, gui.height - 6, 0xD0080808);
         g.fill(PANEL_W + 10, 6, PANEL_W + 11, gui.height - 6, 0x40FFFFFF);
 
         // Left header

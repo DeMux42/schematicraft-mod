@@ -355,7 +355,7 @@ public class SchematicTableIntegration {
 		}
 
 		// Left panel background
-		g.fill(2, 6, PANEL_W + 10, screen.height - 6, 0xD0080808);
+		g.fill(6, 6, PANEL_W + 10, screen.height - 6, 0xD0080808);
 		g.fill(PANEL_W + 10, 6, PANEL_W + 11, screen.height - 6, 0x40FFFFFF);
 
 		if (showUploadForm) {
