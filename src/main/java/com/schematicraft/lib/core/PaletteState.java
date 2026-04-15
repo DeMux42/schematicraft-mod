@@ -59,12 +59,15 @@ public class PaletteState {
     public boolean isSearchTab() { return activeTab == SEARCH_TAB; }
 
     public String getActiveBundleId() {
-        if (isHomeTab()) return null;
+        if (isHomeTab() || isSearchTab()) return null;
+        if (activeTab < 0 || activeTab >= MAX_PINNED_SLOTS) return null;
         return pinnedBundleIds[activeTab];
     }
 
     public String getActiveBundleName() {
         if (isHomeTab()) return "Home";
+        if (isSearchTab()) return "Search";
+        if (activeTab < 0 || activeTab >= MAX_PINNED_SLOTS) return "Home";
         String name = pinnedBundleNames[activeTab];
         return name != null ? name : "Empty";
     }
