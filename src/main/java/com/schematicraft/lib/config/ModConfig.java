@@ -51,9 +51,9 @@ public class ModConfig {
         Path path = Path.of(CONFIG_FILE);
         if (!Files.exists(path)) return;
 
-        try {
+        try (var reader = Files.newBufferedReader(path)) {
             Properties props = new Properties();
-            props.load(Files.newBufferedReader(path));
+            props.load(reader);
             apiKey = props.getProperty("api_key", "");
             serverUrl = props.getProperty("server_url", "https://schematicraft.com");
             pinnedBundles = props.getProperty("pinned_bundles", "");
@@ -70,7 +70,9 @@ public class ModConfig {
             props.setProperty("api_key", apiKey);
             props.setProperty("server_url", serverUrl);
             props.setProperty("pinned_bundles", pinnedBundles);
-            props.store(Files.newBufferedWriter(path), "Schematicraft Config");
+            try (var writer = Files.newBufferedWriter(path)) {
+                props.store(writer, "Schematicraft Config");
+            }
         } catch (IOException e) {
             LOGGER.warn("Failed to save config: {}", e.getMessage());
         }

@@ -258,6 +258,12 @@ public class NbtPreviewRenderer {
         // Clean up byte builders
         for (ByteBufferBuilder bb : byteBuilders.values()) bb.clear();
 
+        // Free old GPU buffers before replacing
+        if (this.vertexBuffers != null) {
+            for (VertexBuffer vb : this.vertexBuffers.values()) {
+                try { vb.close(); } catch (Exception ignored) {}
+            }
+        }
         this.vertexBuffers = newBuffers;
     }
 

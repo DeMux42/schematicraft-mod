@@ -125,6 +125,12 @@ public class ClipboardPreviewRenderer {
                             rt -> rt, rt -> new VertexBuffer(
                                     VertexBuffer.Usage.STATIC)));
             VBORenderer.generateRender(mc.level, BlockPos.ZERO, gadgetStack, 1f, data, vertexBuffers);
+            // Free old GPU buffers before replacing
+            if (this.vertexBuffers != null) {
+                for (var vb : this.vertexBuffers.values()) {
+                    try { vb.close(); } catch (Exception ignored) {}
+                }
+            }
             this.vertexBuffers = vertexBuffers;
             preparedUuid = uuid;
 

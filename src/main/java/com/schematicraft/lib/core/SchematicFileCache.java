@@ -30,7 +30,7 @@ public class SchematicFileCache {
     private static final long MAX_BYTES = 50L * 1024 * 1024; // 50MB
 
     // In-memory index: schematicId -> cached file path
-    private final Map<String, Path> index = new HashMap<>();
+    private final Map<String, Path> index = new java.util.concurrent.ConcurrentHashMap<>();
     private boolean initialized = false;
 
     private SchematicFileCache() {}
@@ -104,10 +104,12 @@ public class SchematicFileCache {
      */
     public void store(String schematicId, String format, byte[] data) {
         init();
+        // Sanitize ID to prevent path traversal
+        String safeId = schematicId.replaceAll("[^a-zA-Z0-9_-]", "_");
         try {
             Files.createDirectories(CACHE_DIR);
             String ext = format != null ? format : "json";
-            Path file = CACHE_DIR.resolve(schematicId + "." + ext);
+            Path file = CACHE_DIR.resolve(safeId + "." + ext);
             Files.write(file, data);
             index.put(schematicId, file);
             LOGGER.debug("Cached schematic {}: {} bytes", schematicId, data.length);
@@ -122,10 +124,11 @@ public class SchematicFileCache {
      */
     public void storeFromFile(String schematicId, String format, Path tempFile) {
         init();
+        String safeId = schematicId.replaceAll("[^a-zA-Z0-9_-]", "_");
         try {
             Files.createDirectories(CACHE_DIR);
             String ext = format != null ? format : "json";
-            Path target = CACHE_DIR.resolve(schematicId + "." + ext);
+            Path target = CACHE_DIR.resolve(safeId + "." + ext);
             Files.copy(tempFile, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
             index.put(schematicId, target);
             long size = Files.size(target);

@@ -79,6 +79,7 @@ public class EnhancedRadialMenu extends Screen {
     private static int pendingBundleIndex = 0;
 
     private final SchematiCraftState state = SchematiCraftState.get();
+    private static java.lang.reflect.Field timeInField;
 
     public EnhancedRadialMenu(ItemStack stack) {
         super(Component.literal(""));
@@ -398,13 +399,7 @@ public class EnhancedRadialMenu extends Screen {
 
     private void createBundleAction(String name) {
         SchematiCraftAPIWrapper.get().createBundle(name, null).thenAccept(json -> {
-            String newBundleId = null;
-            int idStart = json.indexOf("\"id\":\"");
-            if (idStart >= 0) {
-                idStart += 6;
-                int idEnd = json.indexOf("\"", idStart);
-                if (idEnd > idStart) newBundleId = json.substring(idStart, idEnd);
-            }
+            String newBundleId = com.schematicraft.lib.core.ApiJsonParser.parseBundleId(json);
             final String createdBundleId = newBundleId;
 
             Minecraft.getInstance().execute(() -> {
@@ -555,8 +550,11 @@ public class EnhancedRadialMenu extends Screen {
 
         animationTime++;
         try {
-            java.lang.reflect.Field f = ModeRadialMenu.class.getDeclaredField("timeIn");
-            f.setAccessible(true); f.setInt(innerRadial, animationTime);
+            if (timeInField == null) {
+                timeInField = ModeRadialMenu.class.getDeclaredField("timeIn");
+                timeInField.setAccessible(true);
+            }
+            timeInField.setInt(innerRadial, animationTime);
         } catch (Exception ignored) {}
 
         boolean anyFieldFocused = (uploadTitle != null && uploadTitle.isFocused())
