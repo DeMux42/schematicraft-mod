@@ -25,14 +25,22 @@ import java.util.Locale;
 public class PaletteState {
     private static final Logger LOGGER = LogUtils.getLogger();
     private static final PaletteState INSTANCE = new PaletteState();
-    public static final int MAX_PINNED_SLOTS = 7; // slots 1-7 are pinnable, slot 8 is Home
+    public static final int MAX_PINNED_SLOTS = 6; // slots 1-6 are pinnable, slot 7 is Home, slot 8 is Search
 
     private final String[] pinnedBundleIds = new String[MAX_PINNED_SLOTS];
     private final String[] pinnedBundleNames = new String[MAX_PINNED_SLOTS];
-    private int activeTab = MAX_PINNED_SLOTS; // default to Home (last tab, 0-indexed as MAX_PINNED_SLOTS)
+    private int activeTab = MAX_PINNED_SLOTS; // default to Home (index 6)
     private String filterText = "";
     private List<FilteredEntry> filteredResults = new ArrayList<>();
     private boolean cloudMode = false;
+
+    // Cloud search state
+    private List<SchematicEntry> searchResults = new ArrayList<>();
+    private boolean searchLoading = false;
+    private String lastSearchQuery = "";
+
+    public static final int HOME_TAB = MAX_PINNED_SLOTS;     // index 6
+    public static final int SEARCH_TAB = MAX_PINNED_SLOTS + 1; // index 7
 
     private PaletteState() {}
     public static PaletteState get() { return INSTANCE; }
@@ -42,12 +50,13 @@ public class PaletteState {
     public int getActiveTab() { return activeTab; }
 
     public void setActiveTab(int tab) {
-        if (tab < 0 || tab > MAX_PINNED_SLOTS) return;
+        if (tab < 0 || tab > SEARCH_TAB) return;
         this.activeTab = tab;
-        refilter();
+        if (!isSearchTab()) refilter();
     }
 
-    public boolean isHomeTab() { return activeTab == MAX_PINNED_SLOTS; }
+    public boolean isHomeTab() { return activeTab == HOME_TAB; }
+    public boolean isSearchTab() { return activeTab == SEARCH_TAB; }
 
     public String getActiveBundleId() {
         if (isHomeTab()) return null;
@@ -139,6 +148,13 @@ public class PaletteState {
 
     public boolean isCloudMode() { return cloudMode; }
     public void setCloudMode(boolean cloud) { this.cloudMode = cloud; }
+
+    public List<SchematicEntry> getSearchResults() { return searchResults; }
+    public void setSearchResults(List<SchematicEntry> results) { this.searchResults = results; }
+    public boolean isSearchLoading() { return searchLoading; }
+    public void setSearchLoading(boolean loading) { this.searchLoading = loading; }
+    public String getLastSearchQuery() { return lastSearchQuery; }
+    public void setLastSearchQuery(String q) { this.lastSearchQuery = q; }
 
     public List<FilteredEntry> getFilteredResults() {
         return filteredResults;

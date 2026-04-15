@@ -4,6 +4,7 @@ import com.mojang.logging.LogUtils;
 import com.schematicraft.lib.config.ModConfig;
 import com.schematicraft.lib.core.*;
 import com.schematicraft.lib.network.SchematiCraftAPIWrapper;
+import com.schematicraft.lib.network.SchematiCraftAPIWrapper;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
@@ -104,12 +105,17 @@ public class PalettePanel {
 
         // Filter field (always on, auto-focused)
         filterField = new EditBox(mc.font, panelX, y, PANEL_W, 14, Component.literal(""));
-        filterField.setHint(Component.literal("Filter schematics..."));
+        filterField.setHint(Component.literal(state.isSearchTab() ? "Search community..." : "Filter schematics..."));
         filterField.setMaxLength(100);
         filterField.setValue(state.getFilterText());
         filterField.setResponder(text -> {
             state.setFilterText(text);
-            rebuildList();
+            if (state.isSearchTab()) {
+                // Cloud search: debounce and hit API
+                triggerCloudSearch(text);
+            } else {
+                rebuildList();
+            }
         });
         filterField.setFocused(true);
         adder.accept(filterField);
@@ -142,11 +148,12 @@ public class PalettePanel {
 
     private int initTabStrip(java.util.function.Consumer<net.minecraft.client.gui.components.events.GuiEventListener> adder, Screen screen, Minecraft mc, int panelX, int y) {
         PaletteState state = PaletteState.get();
-        int totalTabs = PaletteState.MAX_PINNED_SLOTS + 1; // 7 pinnable + 1 home
+        int totalTabs = PaletteState.MAX_PINNED_SLOTS + 2; // 6 pinnable + Home + Search
         int gap = 1;
         int tabW = (PANEL_W - (totalTabs - 1) * gap) / totalTabs;
         int tabH = 14;
 
+        // Pinnable tabs (1-6)
         for (int i = 0; i < PaletteState.MAX_PINNED_SLOTS; i++) {
             final int slot = i;
             boolean pinned = state.isSlotPinned(i);
@@ -187,20 +194,35 @@ public class PalettePanel {
             tabWidgets.add(btn);
         }
 
-        // Home tab (last slot)
+        // Home tab (slot 7)
         boolean homeActive = state.isHomeTab();
         var homeBtn = net.minecraft.client.gui.components.Button.builder(
                 Component.literal(homeActive ? "\u00a7b\u2302" : "\u2302"),
                 b -> {
-                    state.setActiveTab(PaletteState.MAX_PINNED_SLOTS);
+                    state.setActiveTab(PaletteState.HOME_TAB);
                     mc.setScreen(screen);
                 })
                 .bounds(panelX + PaletteState.MAX_PINNED_SLOTS * (tabW + gap), y, tabW, tabH).build();
         homeBtn.setTooltip(net.minecraft.client.gui.components.Tooltip.create(
                 Component.literal("Home (all bundles)")
-                        .append(Component.literal("\n\u00a77Ctrl+8 to switch"))));
+                        .append(Component.literal("\n\u00a77Ctrl+7 to switch"))));
         adder.accept(homeBtn);
         tabWidgets.add(homeBtn);
+
+        // Search tab (slot 8)
+        boolean searchActive = state.isSearchTab();
+        var searchBtn = net.minecraft.client.gui.components.Button.builder(
+                Component.literal(searchActive ? "\u00a7b\u2604" : "\u2604"),
+                b -> {
+                    state.setActiveTab(PaletteState.SEARCH_TAB);
+                    mc.setScreen(screen);
+                })
+                .bounds(panelX + (PaletteState.MAX_PINNED_SLOTS + 1) * (tabW + gap), y, tabW, tabH).build();
+        searchBtn.setTooltip(net.minecraft.client.gui.components.Tooltip.create(
+                Component.literal("Search community")
+                        .append(Component.literal("\n\u00a77Ctrl+8 to switch"))));
+        adder.accept(searchBtn);
+        tabWidgets.add(searchBtn);
 
         return y + tabH + 2;
     }
@@ -215,6 +237,34 @@ public class PalettePanel {
         selectedIndex = -1;
 
         PaletteState state = PaletteState.get();
+
+        // Search tab: show cloud search results
+        if (state.isSearchTab()) {
+            if (state.isSearchLoading()) {
+                listWidget.addEntry(new SchematicListWidget.MessageEntry(listWidget, "Searching..."));
+                return;
+            }
+            if (state.getFilterText().trim().length() < 2) {
+                listWidget.addEntry(new SchematicListWidget.MessageEntry(listWidget, "Type to search community..."));
+                return;
+            }
+            List<SchematicEntry> results = state.getSearchResults();
+            if (results.isEmpty()) {
+                listWidget.addEntry(new SchematicListWidget.MessageEntry(listWidget, "No results"));
+                return;
+            }
+            SchematicFileCache fileCache = SchematicFileCache.get();
+            for (SchematicEntry s : results) {
+                String title = s.title() != null ? s.title() : "Untitled";
+                String subtitle = s.ownerName() != null ? s.ownerName() : "";
+                if (fileCache.isCached(s.id())) subtitle = "\u00a7a\u25cf " + subtitle;
+                listWidget.addEntry(new SchematicListWidget.SchematicEntry(
+                        listWidget, s.id(), title, subtitle, s.thumbnailUrl()));
+            }
+            selectFirstSchematic();
+            return;
+        }
+
         LibraryState lib = LibraryState.get();
 
         if (lib.isLibraryLoading()) {
@@ -290,6 +340,7 @@ public class PalettePanel {
      */
     public void render(GuiGraphics g, Screen screen, int mouseX, int mouseY, float partialTick) {
         Minecraft mc = Minecraft.getInstance();
+        tickSearch(); // Process search debounce
 
         // Panel background
         int bgLeft = (side == Side.RIGHT) ? PanelLayout.rightBgLeft(screen.width) : PanelLayout.LEFT_BG_LEFT;
@@ -309,9 +360,11 @@ public class PalettePanel {
 
         // Status bar
         PaletteState state = PaletteState.get();
-        int totalCount = state.isHomeTab() ? countTotalSchematics() : countScopedSchematics(state);
-        int shownCount = countShownSchematics(state.getFilteredResults());
-        String statusLeft = shownCount + " of " + totalCount;
+        int totalCount = state.isSearchTab() ? state.getSearchResults().size()
+                : state.isHomeTab() ? countTotalSchematics() : countScopedSchematics(state);
+        int shownCount = state.isSearchTab() ? state.getSearchResults().size()
+                : countShownSchematics(state.getFilteredResults());
+        String statusLeft = shownCount + (state.isSearchTab() ? " results" : " of " + totalCount);
         String statusRight = "\u2191\u2193 nav \u00b7 Enter load";
         int statusY = screen.height - PanelLayout.STATUS_TEXT_Y_OFFSET;
         g.drawString(mc.font, "\u00a78" + statusLeft, panelX + 2, statusY, 0x666666);
@@ -334,7 +387,9 @@ public class PalettePanel {
             int num = keyCode - 49;
             PaletteState state = PaletteState.get();
             if (num == 7) {
-                state.setActiveTab(PaletteState.MAX_PINNED_SLOTS);
+                state.setActiveTab(PaletteState.SEARCH_TAB);
+            } else if (num == 6) {
+                state.setActiveTab(PaletteState.HOME_TAB);
             } else if (state.isSlotPinned(num)) {
                 state.setActiveTab(num);
             }
@@ -460,26 +515,26 @@ public class PalettePanel {
     private void cycleTab(int modifiers) {
         PaletteState state = PaletteState.get();
         int current = state.getActiveTab();
+        int maxTab = PaletteState.SEARCH_TAB;
         int next;
-        if ((modifiers & 1) != 0) { // Shift+Tab = backwards
+        if ((modifiers & 1) != 0) {
             next = current - 1;
-            if (next < 0) next = PaletteState.MAX_PINNED_SLOTS;
+            if (next < 0) next = maxTab;
         } else {
             next = current + 1;
-            if (next > PaletteState.MAX_PINNED_SLOTS) next = 0;
+            if (next > maxTab) next = 0;
         }
-        // Skip unpinned slots
         int attempts = 0;
-        while (attempts <= PaletteState.MAX_PINNED_SLOTS + 1) {
-            if (next == PaletteState.MAX_PINNED_SLOTS || state.isSlotPinned(next)) {
+        while (attempts <= maxTab + 1) {
+            if (next == PaletteState.HOME_TAB || next == PaletteState.SEARCH_TAB || state.isSlotPinned(next)) {
                 state.setActiveTab(next);
                 selectedIndex = 0;
                 rebuildList();
                 return;
             }
             next = (modifiers & 1) != 0 ? next - 1 : next + 1;
-            if (next < 0) next = PaletteState.MAX_PINNED_SLOTS;
-            if (next > PaletteState.MAX_PINNED_SLOTS) next = 0;
+            if (next < 0) next = maxTab;
+            if (next > maxTab) next = 0;
             attempts++;
         }
     }
@@ -523,4 +578,51 @@ public class PalettePanel {
 
     public EditBox getFilterField() { return filterField; }
     public SchematicListWidget getListWidget() { return listWidget; }
+
+    // Cloud search debounce
+    private long lastSearchTime = 0;
+    private String pendingSearchQuery = null;
+
+    private void triggerCloudSearch(String query) {
+        if (query.trim().length() < 2) {
+            PaletteState.get().setSearchResults(new java.util.ArrayList<>());
+            rebuildList();
+            return;
+        }
+        pendingSearchQuery = query;
+        lastSearchTime = System.currentTimeMillis();
+    }
+
+    /**
+     * Call from the host screen's render method to process search debounce.
+     * Checks if a pending search query has been waiting long enough (500ms).
+     */
+    public void tickSearch() {
+        if (pendingSearchQuery != null && System.currentTimeMillis() - lastSearchTime > 500) {
+            String q = pendingSearchQuery;
+            pendingSearchQuery = null;
+            PaletteState state = PaletteState.get();
+            state.setSearchLoading(true);
+            state.setLastSearchQuery(q);
+            rebuildList();
+
+            SchematiCraftAPIWrapper.get().search(q).thenAccept(json -> {
+                var results = ApiJsonParser.parseSearch(json);
+                java.util.List<SchematicEntry> schematics = new java.util.ArrayList<>();
+                for (var r : results) schematics.add(r.schematic());
+                net.minecraft.client.Minecraft.getInstance().execute(() -> {
+                    state.setSearchLoading(false);
+                    state.setSearchResults(schematics);
+                    rebuildList();
+                });
+            }).exceptionally(ex -> {
+                net.minecraft.client.Minecraft.getInstance().execute(() -> {
+                    state.setSearchLoading(false);
+                    state.setSearchResults(new java.util.ArrayList<>());
+                    rebuildList();
+                });
+                return null;
+            });
+        }
+    }
 }

@@ -34,12 +34,13 @@ public class ClientEvents {
         // Ctrl+1 through Ctrl+8: switch palette tab (works without panel open)
         if (event.getAction() == 1 && (event.getModifiers() & 2) != 0) { // GLFW_PRESS + CTRL
             int key = event.getKey();
-            // GLFW_KEY_1 = 49 through GLFW_KEY_8 = 56
             if (key >= 49 && key <= 56) {
                 int num = key - 49; // 0-7
                 com.schematicraft.lib.core.PaletteState state = com.schematicraft.lib.core.PaletteState.get();
                 if (num == 7) {
-                    state.setActiveTab(com.schematicraft.lib.core.PaletteState.MAX_PINNED_SLOTS);
+                    state.setActiveTab(com.schematicraft.lib.core.PaletteState.SEARCH_TAB);
+                } else if (num == 6) {
+                    state.setActiveTab(com.schematicraft.lib.core.PaletteState.HOME_TAB);
                 } else if (state.isSlotPinned(num)) {
                     state.setActiveTab(num);
                 }
