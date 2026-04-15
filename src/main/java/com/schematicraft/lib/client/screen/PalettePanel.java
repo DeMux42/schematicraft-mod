@@ -39,6 +39,7 @@ public class PalettePanel {
     private int selectedIndex = 0;
     private boolean initialized = false;
     private int panelX = PanelLayout.LEFT_X;
+    private Screen parentScreen; // stored for focus management
 
     // Stored widget references for re-rendering on top of background
     private final java.util.List<net.minecraft.client.gui.components.AbstractWidget> headerWidgets = new java.util.ArrayList<>();
@@ -74,6 +75,7 @@ public class PalettePanel {
     private void initWithAdder(java.util.function.Consumer<net.minecraft.client.gui.components.events.GuiEventListener> adder, Screen screen) {
         Minecraft mc = Minecraft.getInstance();
         PaletteState state = PaletteState.get();
+        parentScreen = screen;
 
         // Load pinned state from config on first init
         if (!initialized) {
@@ -118,6 +120,8 @@ public class PalettePanel {
             }
         });
         filterField.setFocused(true);
+        // Set screen-level focus so keyboard input routes to the filter
+        if (parentScreen != null) parentScreen.setFocused(filterField);
         adder.accept(filterField);
         y += 16;
 
