@@ -1,6 +1,6 @@
 package com.schematicraft.bg2addon.network;
 
-import com.schematicraft.SchematiCraftMod;
+import com.schematicraft.bg2addon.SchematiCraftBG2;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
@@ -18,7 +18,7 @@ public record SyncClipboardDataPayload(
 ) implements CustomPacketPayload {
 
     public static final Type<SyncClipboardDataPayload> TYPE = new Type<>(
-            ResourceLocation.fromNamespaceAndPath(SchematiCraftMod.MODID, "sync_clipboard_data")
+            ResourceLocation.fromNamespaceAndPath(SchematiCraftBG2.MODID, "sync_clipboard_data")
     );
 
     @Override

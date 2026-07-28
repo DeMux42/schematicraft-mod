@@ -1,7 +1,7 @@
 package com.schematicraft.bg2addon.network;
 
 import com.schematicraft.api.SchematiCraftAPI;
-import com.schematicraft.SchematiCraftMod;
+import com.schematicraft.bg2addon.SchematiCraftBG2;
 import com.schematicraft.lib.core.LibraryState;
 
 import javax.imageio.IIOImage;
@@ -17,8 +17,13 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * BG2-specific API wrapper. Delegates shared operations to the lib wrapper
- * and adds BG2-specific upload (StatePos to BG2 JSON conversion + image compression).
+ * BG2-specific upload path: converts a gadget copy (StatePos list) into Building
+ * Gadgets JSON, compresses the screenshots, and uploads.
+ *
+ * Everything generic (status, library, download, bundles, feedback) goes straight
+ * to the lib wrapper. This class used to re-expose all of those as delegates,
+ * which made it look like a second API client and left two ways to do the same
+ * call. Only the BG2-specific piece belongs here.
  */
 public class SchematiCraftAPIWrapper {
     private static final SchematiCraftAPIWrapper INSTANCE = new SchematiCraftAPIWrapper();
@@ -31,18 +36,8 @@ public class SchematiCraftAPIWrapper {
         return com.schematicraft.lib.network.SchematiCraftAPIWrapper.get();
     }
 
-    // Delegate shared operations to lib
-    public CompletableFuture<String> getStatus() { return lib().getStatus(); }
-    public CompletableFuture<Void> loadLibrary() { return lib().loadLibrary(); }
-    public CompletableFuture<Void> refreshLibrary() { return lib().refreshLibrary(); }
-    public CompletableFuture<String> search(String query) { return lib().search(query); }
-    public CompletableFuture<SchematiCraftAPI.DownloadResult> downloadSchematic(String id) { return lib().downloadSchematic(id); }
-    public CompletableFuture<String> createBundle(String name, String desc) { return lib().createBundle(name, desc); }
-    public void submitSuccessFeedback(String downloadId) { lib().submitSuccessFeedback(downloadId); }
-    public void submitFailureFeedback(String downloadId, String cat, String details) { lib().submitFailureFeedback(downloadId, cat, details); }
-
     /**
-     * BG2-specific: export StatePos data to BG2 JSON and upload to Schematicraft.
+     * Export StatePos data to BG2 JSON and upload it.
      * Runs entirely client-side. The API key never leaves the client.
      */
     public CompletableFuture<Boolean> uploadFromClient(
@@ -86,16 +81,16 @@ public class SchematiCraftAPIWrapper {
                             jpgWriter.dispose();
                         }
                         processedImages.add(jpegFile);
-                        SchematiCraftMod.LOGGER.info("  image: {}x{} -> {} bytes JPEG",
+                        SchematiCraftBG2.LOGGER.info("  image: {}x{} -> {} bytes JPEG",
                                 original.getWidth(), original.getHeight(), Files.size(jpegFile));
                     } catch (Exception imgEx) {
-                        SchematiCraftMod.LOGGER.warn("Failed to process image: {}", imgEx.getMessage());
+                        SchematiCraftBG2.LOGGER.warn("Failed to process image: {}", imgEx.getMessage());
                     }
                 }
 
                 long totalBytes = Files.size(tempFile);
                 for (Path img : processedImages) totalBytes += Files.size(img);
-                SchematiCraftMod.LOGGER.info("Client-side upload: title='{}', blocks={}, images={}, totalBytes={}",
+                SchematiCraftBG2.LOGGER.info("Client-side upload: title='{}', blocks={}, images={}, totalBytes={}",
                         title, statePosList.size(), processedImages.size(), totalBytes);
                 String response = lib().createClient().upload(tempFile, title, description, "1.21.1", "neoforge", null,
                         false, bundleId, processedImages);
@@ -107,7 +102,7 @@ public class SchematiCraftAPIWrapper {
                 LibraryState.get().invalidateLibrary();
 
                 boolean isDuplicate = response != null && response.contains("\"isDuplicate\":true");
-                SchematiCraftMod.LOGGER.info("Upload complete: '{}'{}", title, isDuplicate ? " (duplicate detected)" : "");
+                SchematiCraftBG2.LOGGER.info("Upload complete: '{}'{}", title, isDuplicate ? " (duplicate detected)" : "");
                 return isDuplicate;
             } catch (Exception e) {
                 String detail = e.getMessage();
@@ -116,7 +111,7 @@ public class SchematiCraftAPIWrapper {
                 } else if (e.getCause() instanceof SchematiCraftAPI.APIException apiEx) {
                     detail = "HTTP " + apiEx.statusCode + ": " + apiEx.body;
                 }
-                SchematiCraftMod.LOGGER.error("Client-side upload failed: {}", detail, e);
+                SchematiCraftBG2.LOGGER.error("Client-side upload failed: {}", detail, e);
                 throw new RuntimeException(detail, e);
             }
         }, lib().getExecutor());

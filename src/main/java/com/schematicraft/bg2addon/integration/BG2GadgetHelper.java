@@ -3,10 +3,10 @@ package com.schematicraft.bg2addon.integration;
 import com.direwolf20.buildinggadgets2.common.items.BaseGadget;
 import com.direwolf20.buildinggadgets2.common.items.GadgetCopyPaste;
 import com.direwolf20.buildinggadgets2.common.items.GadgetCutPaste;
+import com.direwolf20.buildinggadgets2.common.network.data.SendPastePayload;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.mojang.logging.LogUtils;
-import com.schematicraft.bg2addon.client.TemplateManagerIntegration;
 import com.schematicraft.bg2addon.network.LoadTemplatePayload;
 import com.schematicraft.lib.network.ServerMode;
 import net.minecraft.nbt.CompoundTag;
@@ -16,6 +16,8 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.slf4j.Logger;
+
+import java.util.UUID;
 
 /**
  * Routes template loading between two modes based on server capability.
@@ -54,6 +56,22 @@ import org.slf4j.Logger;
 public class BG2GadgetHelper {
     private static final Logger LOGGER = LogUtils.getLogger();
 
+    /**
+     * Minecraft refuses to decode an NBT tag larger than 2 MiB inside a packet
+     * (see NbtAccounter). Both load paths send NBT over the network, so anything
+     * above this cannot reach the server no matter which path we pick.
+     *
+     * We check before sending because the send itself cannot fail loudly:
+     * PacketDistributor.sendToServer never throws, the server throws while
+     * decoding, and the client would otherwise report a success that never
+     * happened.
+     *
+     * A small margin is reserved for the packet's own framing and tag names.
+     */
+    private static final int NBT_PACKET_LIMIT_BYTES = 2 * 1024 * 1024;
+    private static final int NBT_SAFETY_MARGIN_BYTES = 16 * 1024;
+    static final int MAX_TEMPLATE_NBT_BYTES = NBT_PACKET_LIMIT_BYTES - NBT_SAFETY_MARGIN_BYTES;
+
     public static boolean isHoldingCopyPaste(Player player) {
         try {
             ItemStack mainHand = player.getItemInHand(InteractionHand.MAIN_HAND);
@@ -74,27 +92,46 @@ public class BG2GadgetHelper {
      * Load a BG2 JSON template into the player's gadget.
      * Uses direct mode (our packet) if the server has the mod,
      * or Template Manager fallback (BG2's own SendPastePayload) if client-only.
+     *
+     * @return null on success, or a short user-facing reason on failure
      */
-    public static boolean loadTemplateIntoGadget(Player player, byte[] templateData) {
-        if (ServerMode.isDirectModeAvailable()) {
-            return loadViaDirect(templateData);
-        } else {
-            return TemplateManagerIntegration.loadViaTemplateManager(templateData);
+    public static String loadTemplateIntoGadget(Player player, byte[] templateData) {
+        CompoundTag nbtData = parseBG2Json(templateData);
+        if (nbtData == null) {
+            return "This schematic could not be read as a Building Gadgets template";
+        }
+
+        // Must be checked before sending. The server throws while decoding, so a
+        // send would otherwise look like it worked.
+        int size = nbtData.sizeInBytes();
+        if (size > MAX_TEMPLATE_NBT_BYTES) {
+            LOGGER.warn("Template too large for Building Gadgets: {} bytes NBT, limit {}",
+                    size, MAX_TEMPLATE_NBT_BYTES);
+            return "Too big for Building Gadgets: " + formatSize(size)
+                    + " (limit " + formatSize(MAX_TEMPLATE_NBT_BYTES) + ")";
+        }
+
+        try {
+            if (ServerMode.isDirectModeAvailable()) {
+                PacketDistributor.sendToServer(new LoadTemplatePayload(nbtData));
+                LOGGER.info("Sent template via direct mode ({} bytes NBT)", size);
+            } else {
+                PacketDistributor.sendToServer(new SendPastePayload(UUID.randomUUID(), nbtData));
+                LOGGER.info("Sent template via BG2 SendPastePayload ({} bytes NBT)", size);
+            }
+            return null;
+        } catch (Exception e) {
+            LOGGER.error("Template load failed: {}", e.getMessage());
+            return "Could not send the template to the server";
         }
     }
 
-    private static boolean loadViaDirect(byte[] templateData) {
-        try {
-            CompoundTag nbtData = parseBG2Json(templateData);
-            if (nbtData == null) return false;
-
-            PacketDistributor.sendToServer(new LoadTemplatePayload(nbtData));
-            LOGGER.info("Sent template via direct mode ({} bytes NBT)", nbtData.sizeInBytes());
-            return true;
-        } catch (Exception e) {
-            LOGGER.error("Direct template load failed: {}", e.getMessage());
-            return false;
+    /** Human-readable byte size for user-facing messages. */
+    private static String formatSize(int bytes) {
+        if (bytes >= 1024 * 1024) {
+            return String.format("%.1f MB", bytes / (1024.0 * 1024.0));
         }
+        return Math.max(1, bytes / 1024) + " KB";
     }
 
     static CompoundTag parseBG2Json(byte[] templateData) {

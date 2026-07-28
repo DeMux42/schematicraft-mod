@@ -6,7 +6,7 @@ import com.direwolf20.buildinggadgets2.common.items.GadgetCutPaste;
 import com.direwolf20.buildinggadgets2.common.worlddata.BG2Data;
 import com.direwolf20.buildinggadgets2.util.GadgetNBT;
 import com.direwolf20.buildinggadgets2.util.datatypes.StatePos;
-import com.schematicraft.SchematiCraftMod;
+import com.schematicraft.bg2addon.SchematiCraftBG2;
 import com.schematicraft.bg2addon.core.ClipboardEntry;
 import com.schematicraft.bg2addon.core.SchematiCraftState;
 import com.schematicraft.bg2addon.network.SyncClipboardDataPayload;
@@ -83,11 +83,11 @@ public class ClipboardTracker {
                     serverPlayer.connection.send(new SyncClipboardDataPayload(clipboardUuid, nbtMap));
                 }
 
-                SchematiCraftMod.LOGGER.info("Added copy to clipboard: {} blocks (snapshot {})",
+                SchematiCraftBG2.LOGGER.info("Added copy to clipboard: {} blocks (snapshot {})",
                         blockCount, clipboardUuid.toString().substring(0, 8));
             }
         } catch (Exception e) {
-            SchematiCraftMod.LOGGER.debug("Clipboard check error: {}", e.getMessage());
+            SchematiCraftBG2.LOGGER.debug("Clipboard check error: {}", e.getMessage());
         }
     }
 }

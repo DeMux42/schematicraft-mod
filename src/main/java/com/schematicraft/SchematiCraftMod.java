@@ -11,12 +11,15 @@ import org.slf4j.Logger;
 
 /**
  * Schematicraft cloud library connector for Minecraft.
- * Detects installed editor mods and activates the appropriate integrations.
- * Currently supports Building Gadgets 2 and Create.
  *
- * Event subscribers for editor-specific classes are registered manually
- * (not via @EventBusSubscriber) to avoid class loading failures when
- * the target editor mod is not installed.
+ * One mod, one jar. Editor integrations are detected at runtime and only the
+ * ones whose editor is installed are activated. Building Gadgets 2 and Create
+ * are both optional.
+ *
+ * Event subscribers for editor-specific classes are registered manually here
+ * (not via @EventBusSubscriber) because those classes reference the editor's
+ * own types. Annotation scanning would load them even when the editor is
+ * absent, which would crash on missing classes.
  */
 @Mod(SchematiCraftMod.MODID)
 public class SchematiCraftMod {
@@ -30,64 +33,57 @@ public class SchematiCraftMod {
         boolean hasBG2 = ModList.get().isLoaded("buildinggadgets2");
         boolean hasCreate = ModList.get().isLoaded("create");
 
-        // BG2 integration: register network packets on MOD bus, game events on GAME bus
+        if (!hasBG2 && !hasCreate) {
+            LOGGER.warn("No supported editor found (Building Gadgets 2 or Create). "
+                    + "Schematicraft will load but has nothing to integrate with.");
+        }
+
+        // Building Gadgets 2: needs both sides. The server half enables loading
+        // straight into a gadget and reading clipboard copies for upload.
         if (hasBG2) {
             LOGGER.info("Building Gadgets 2 detected, activating BG2 integration");
-            // MOD bus: network payload registration
+
             modEventBus.addListener(
                 com.schematicraft.bg2addon.network.ModNetworking::registerPayloads);
-            // GAME bus: server tick for clipboard tracking
             NeoForge.EVENT_BUS.addListener(
                 com.schematicraft.bg2addon.integration.ServerEvents::onServerTick);
 
             if (FMLEnvironment.dist.isClient()) {
-                // MOD bus: client setup and keybindings
                 modEventBus.addListener(
                     com.schematicraft.bg2addon.client.ClientSetup::onClientSetup);
                 modEventBus.addListener(
                     com.schematicraft.bg2addon.client.ClientSetup::registerKeyMappings);
-                // GAME bus: screen interception, template manager, key/char events
+
+                // Radial launcher and the Template Manager button.
                 NeoForge.EVENT_BUS.addListener(
                     com.schematicraft.bg2addon.client.ScreenInterceptor::onScreenOpen);
                 NeoForge.EVENT_BUS.addListener(
                     com.schematicraft.bg2addon.client.TemplateManagerIntegration::onScreenInit);
+
+                // Keybind handling and server-mode reset on logout.
                 NeoForge.EVENT_BUS.addListener(
-                    com.schematicraft.bg2addon.client.TemplateManagerIntegration::onScreenRender);
+                    com.schematicraft.bg2addon.client.ClientEvents::onKeyInput);
                 NeoForge.EVENT_BUS.addListener(
-                    com.schematicraft.bg2addon.client.TemplateManagerIntegration::onKeyPressed);
+                    com.schematicraft.bg2addon.client.ClientEvents::onDisconnect);
+                // Keeps BG2 keybinds from firing while our screens are open.
                 NeoForge.EVENT_BUS.addListener(
-                    com.schematicraft.bg2addon.client.TemplateManagerIntegration::onCharTyped);
-                NeoForge.EVENT_BUS.addListener(
-                    com.schematicraft.bg2addon.client.TemplateManagerIntegration::onMouseClicked);
-                NeoForge.EVENT_BUS.addListener(
-                    com.schematicraft.bg2addon.client.TemplateManagerIntegration::onMouseReleased);
-                NeoForge.EVENT_BUS.addListener(
-                    com.schematicraft.bg2addon.client.TemplateManagerIntegration::onMouseDragged);
+                    com.schematicraft.bg2addon.client.ClientEvents::onClientTickPre);
             }
         }
 
-        // Create integration: purely client-side, no network packets
+        // Create: purely client-side. Downloads are written to Create's
+        // schematics folder, so no server component and no packets are needed.
         if (hasCreate && FMLEnvironment.dist.isClient()) {
             LOGGER.info("Create detected, activating Create integration");
+            modEventBus.addListener(
+                com.schematicraft.create.client.CreateClientSetup::onClientSetup);
             NeoForge.EVENT_BUS.addListener(
                 com.schematicraft.create.client.SchematicTableIntegration::onScreenInit);
-            NeoForge.EVENT_BUS.addListener(
-                com.schematicraft.create.client.SchematicTableIntegration::onScreenRender);
-            NeoForge.EVENT_BUS.addListener(
-                com.schematicraft.create.client.SchematicTableIntegration::onKeyPressed);
-            NeoForge.EVENT_BUS.addListener(
-                com.schematicraft.create.client.SchematicTableIntegration::onCharTyped);
-            NeoForge.EVENT_BUS.addListener(
-                com.schematicraft.create.client.SchematicTableIntegration::onMouseClicked);
-            NeoForge.EVENT_BUS.addListener(
-                com.schematicraft.create.client.SchematicTableIntegration::onMouseReleased);
-            NeoForge.EVENT_BUS.addListener(
-                com.schematicraft.create.client.SchematicTableIntegration::onMouseDragged);
         }
 
         if (FMLEnvironment.dist.isClient()) {
             com.schematicraft.lib.network.SchematiCraftAPIWrapper.get()
-                .setClientIdentifier("schematicraft/0.2.0 (neoforge)");
+                .setClientIdentifier("schematicraft/0.3.0 (neoforge)");
         }
     }
 }

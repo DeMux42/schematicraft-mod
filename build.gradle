@@ -62,6 +62,11 @@ neoForge {
 
 sourceSets.main.resources { srcDir 'src/generated/resources' }
 
+// Shared, editor-agnostic Schematicraft library (browse/search/download/preview/camera).
+// Kept as a separate source module so Fabric and Forge editor mods can reuse it.
+// For release builds this would become a jarJar dependency instead.
+sourceSets.main.java.srcDir '../schematicraft-lib/src/main/java'
+
 // Official Schematicraft API client (shared across all integrations)
 sourceSets.main.java.srcDir '../../api-clients/java/src'
 

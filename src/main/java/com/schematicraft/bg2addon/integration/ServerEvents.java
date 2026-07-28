@@ -1,15 +1,17 @@
 package com.schematicraft.bg2addon.integration;
 
-import com.schematicraft.SchematiCraftMod;
-import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
+/**
+ * Watches for new Building Gadgets copies so they can be offered for upload.
+ * Registered manually from the mod entrypoint, so no annotation here: an
+ * annotation would double-register this handler.
+ */
 public class ServerEvents {
 
     private static int tickCounter = 0;
     private static final int CHECK_INTERVAL_TICKS = 20;
 
-    @SubscribeEvent
     public static void onServerTick(ServerTickEvent.Post event) {
         tickCounter++;
         if (tickCounter < CHECK_INTERVAL_TICKS) return;

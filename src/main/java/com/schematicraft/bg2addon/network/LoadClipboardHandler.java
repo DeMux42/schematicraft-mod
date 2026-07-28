@@ -6,7 +6,7 @@ import com.direwolf20.buildinggadgets2.common.items.GadgetCutPaste;
 import com.direwolf20.buildinggadgets2.common.worlddata.BG2Data;
 import com.direwolf20.buildinggadgets2.util.GadgetNBT;
 import com.direwolf20.buildinggadgets2.util.datatypes.StatePos;
-import com.schematicraft.SchematiCraftMod;
+import com.schematicraft.bg2addon.SchematiCraftBG2;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -72,12 +72,12 @@ public class LoadClipboardHandler {
                         Component.literal("\u00a7aLoaded from clipboard (" + list.size() + " blocks). Ready to paste."),
                         true);
 
-                SchematiCraftMod.LOGGER.info("Loaded clipboard entry {} ({} blocks) for player {}",
+                SchematiCraftBG2.LOGGER.info("Loaded clipboard entry {} ({} blocks) for player {}",
                         payload.sourceGadgetUuid().toString().substring(0, 8),
                         list.size(), player.getName().getString());
 
             } catch (Exception e) {
-                SchematiCraftMod.LOGGER.error("Failed to load clipboard entry: {}", e.getMessage(), e);
+                SchematiCraftBG2.LOGGER.error("Failed to load clipboard entry: {}", e.getMessage(), e);
                 player.displayClientMessage(
                         Component.literal("\u00a7cFailed to load from clipboard: " + e.getMessage()), true);
             }
