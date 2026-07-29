@@ -54,7 +54,12 @@ public class ScreenInterceptor {
 
         event.addListener(Button.builder(
                 Component.literal("\u00a7a\u2601 Schematicraft"),
-                b -> mc.setScreen(new LibraryScreen(TargetDevice.OpenContext.BG2_GADGET))
+                b -> {
+                    var journey = ClientSetup.resolveHeldJourney(mc.player);
+                    mc.setScreen(new LibraryScreen(
+                            journey != null ? journey
+                                    : com.schematicraft.lib.client.gui.EditorJourney.browse()));
+                }
         ).bounds(x, y, BTN_W, BTN_H).build());
     }
 }

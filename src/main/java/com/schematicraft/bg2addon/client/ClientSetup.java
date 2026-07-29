@@ -1,182 +1,272 @@
 package com.schematicraft.bg2addon.client;
 
+import com.direwolf20.buildinggadgets2.common.items.BaseGadget;
+import com.direwolf20.buildinggadgets2.common.items.GadgetCopyPaste;
+import com.direwolf20.buildinggadgets2.common.items.GadgetCutPaste;
+import com.direwolf20.buildinggadgets2.common.worlddata.BG2DataClient;
+import com.direwolf20.buildinggadgets2.util.GadgetNBT;
+import com.direwolf20.buildinggadgets2.util.datatypes.StatePos;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.schematicraft.bg2addon.SchematiCraftBG2;
 import com.schematicraft.bg2addon.core.ClipboardEntry;
 import com.schematicraft.bg2addon.core.SchematiCraftState;
 import com.schematicraft.bg2addon.integration.BG2GadgetHelper;
+import com.schematicraft.bg2addon.network.LoadTemplatePayload;
+import com.schematicraft.lib.client.gui.EditorJourney;
 import com.schematicraft.lib.client.gui.LibraryScreen;
 import com.schematicraft.lib.client.gui.LoadLimits;
 import com.schematicraft.lib.client.gui.TargetCatalog;
 import com.schematicraft.lib.client.gui.TargetDevice;
 import com.schematicraft.lib.client.gui.UploadSource;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
+import com.schematicraft.lib.network.ServerMode;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.TagParser;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
-import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
 
+import javax.annotation.Nullable;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
-/**
- * Registers the Building Gadgets 2 integration into the shared library screen.
- *
- * Two seams are registered here:
- * - a load handler, which puts a downloaded schematic into the gadget or the
- *   Template Manager slot depending on server capability
- * - an upload source, which exposes gadget copies so the shared upload screen
- *   can publish them without knowing anything about Building Gadgets
- */
-public class ClientSetup {
+/** Registers BG2 targets, sources, and held-item journey resolution. */
+public final class ClientSetup {
+    public static final TargetDevice.Type GADGET_TARGET =
+            TargetDevice.Type.of("buildinggadgets2:held_gadget");
+    public static final TargetDevice.Type TEMPLATE_TARGET =
+            TargetDevice.Type.of("buildinggadgets2:template_manager");
+
+    private ClientSetup() {}
 
     public static void onClientSetup(FMLClientSetupEvent event) {
-        // Load: dispatch a downloaded schematic into BG2. Registered for both BG2
-        // targets. BG2GadgetHelper picks direct gadget load or the Template
-        // Manager route depending on server capability.
-        LibraryScreen.LoadHandler bg2Load = (target, data) -> {
-            var player = Minecraft.getInstance().player;
-            if (player == null) {
-                return LibraryScreen.LoadResult.failure("No player");
-            }
+        LibraryScreen.setLoadHandler(TEMPLATE_TARGET,
+                bg2LoadHandler(BG2GadgetHelper.Destination.TEMPLATE));
+        LibraryScreen.setLoadHandler(GADGET_TARGET,
+                bg2LoadHandler(BG2GadgetHelper.Destination.GADGET));
 
-            // Validate blocks against the registry before loading
-            List<String> droppedTypes = validateBlockNames(data);
-
-            String error = BG2GadgetHelper.loadTemplateIntoGadget(player, data);
-            if (error != null) {
-                return LibraryScreen.LoadResult.failure(error);
-            }
-
-            if (!droppedTypes.isEmpty()) {
-                return LibraryScreen.LoadResult.partial(0, droppedTypes);
-            }
-            return LibraryScreen.LoadResult.success(0);
-        };
-        LibraryScreen.setLoadHandler(TargetDevice.Type.BG2_GADGET, bg2Load);
-        LibraryScreen.setLoadHandler(TargetDevice.Type.BG2_TEMPLATE_MANAGER, bg2Load);
-
-        // Block-count limits, so the library can warn or refuse before downloading.
-        //
-        // soft = Building Gadgets' own copy limit (Copy.java hardcodes 100,000
-        // positions). Above this a template loads, but it is outside what BG2 was
-        // built and tested for, and paste costs power per block.
-        //
-        // hard = derived from Minecraft's 2 MiB packet NBT ceiling. Observed
-        // encoding runs about 4 bytes per block, so roughly 500,000 blocks is the
-        // most that can cross the network. It is an estimate, which is why the
-        // exact byte check still runs after conversion.
-        // maxBytes is the deterministic guard and needs no metadata. The template
-        // has to fit in a 2 MiB NBT packet anyway, and the JSON form is larger than
-        // the packed NBT, so 8 MB of JSON is already far past anything loadable.
-        // Refusing here avoids the freeze from parsing a huge payload we could
-        // never send.
-        LoadLimits bg2Limits = new LoadLimits(
+        LoadLimits limits = new LoadLimits(
                 100_000, 500_000, 8 * 1024 * 1024,
                 "Minecraft caps NBT in a packet at 2 MB");
-        LibraryScreen.setLoadLimits(TargetDevice.Type.BG2_GADGET, bg2Limits);
-        LibraryScreen.setLoadLimits(TargetDevice.Type.BG2_TEMPLATE_MANAGER, bg2Limits);
-
-        // Compatibility catalog: what the library screen shows as loadable.
+        LibraryScreen.setLoadLimits(GADGET_TARGET, limits);
+        LibraryScreen.setLoadLimits(TEMPLATE_TARGET, limits);
         TargetCatalog.register(new TargetCatalog.Entry(
-                TargetDevice.Type.BG2_GADGET,
-                "Copy/Paste Gadget",
-                "buildinggadgets2:gadget_copy_paste",
-                "Hold the gadget"));
+                GADGET_TARGET, "Held BG2 Gadget",
+                "buildinggadgets2:gadget_copy_paste", "Hold a Copy/Paste or Cut/Paste Gadget",
+                "Load into Gadget", "Goes into the gadget you are holding",
+                "gadget", "json", "BuildingGadgets"));
         TargetCatalog.register(new TargetCatalog.Entry(
-                TargetDevice.Type.BG2_TEMPLATE_MANAGER,
-                "Template Manager",
-                "buildinggadgets2:template_manager",
-                "Open a Template Manager"));
+                TEMPLATE_TARGET, "Template Manager",
+                "buildinggadgets2:template_manager", "Open one with paper in slot 1",
+                "Load into Template", "Goes into slot 1. No gadget needed.",
+                "template", "json", "BuildingGadgets",
+                new TargetCatalog.Receiver(
+                        () -> BG2GadgetHelper.templateSlotContents(
+                                Minecraft.getInstance().player),
+                        "Template", "Needs paper")));
 
-        // Upload: expose gadget copies to the shared upload screen.
-        LibraryScreen.setUploadSource(new BG2UploadSource());
-
+        EditorJourney.registerHeldResolver(ClientSetup::resolveHeldJourney);
+        ServerMode.registerCapabilityProbe(() -> {
+            var connection = Minecraft.getInstance().getConnection();
+            return connection != null
+                    && connection.hasChannel(LoadTemplatePayload.TYPE.id());
+        });
         SchematiCraftBG2.LOGGER.info("Schematicraft BG2 client setup complete");
     }
 
-    public static void registerKeyMappings(RegisterKeyMappingsEvent event) {
-        event.register(ModKeyBindings.OPEN_SCHEMATICRAFT);
-        event.register(ModKeyBindings.OPEN_API_KEY_SCREEN);
+    /** Journey used by both the global keybind and BG2's radial launcher. */
+    @Nullable
+    public static EditorJourney resolveHeldJourney(Player player) {
+        ItemStack gadget = BaseGadget.getGadget(player);
+        if (!isSupportedGadget(gadget)) return null;
+
+        if (!ServerMode.isDirectModeAvailable()) {
+            return new EditorJourney(TargetDevice.none(), null, null,
+                    "Direct gadget loading needs Schematicraft on the server. "
+                            + "Use a Template Manager instead.");
+        }
+
+        return new EditorJourney(
+                TargetDevice.of(GADGET_TARGET, TargetDevice.Mode.SERVER),
+                new GadgetUploadSource(gadget), null, null);
     }
 
-    /**
-     * Upload source backed by the Building Gadgets clipboard.
-     * Candidate ids are the clipboard entry gadget UUIDs.
-     */
-    private static class BG2UploadSource implements UploadSource {
+    public static EditorJourney templateJourney(Screen manager) {
+        return new EditorJourney(
+                TargetDevice.of(TEMPLATE_TARGET, TargetDevice.Mode.CLIENT_ONLY),
+                new TemplateUploadSource(), manager, null);
+    }
+
+    private static boolean isSupportedGadget(ItemStack stack) {
+        return !stack.isEmpty() && (stack.getItem() instanceof GadgetCopyPaste
+                || stack.getItem() instanceof GadgetCutPaste);
+    }
+
+    private static LibraryScreen.LoadHandler bg2LoadHandler(
+            BG2GadgetHelper.Destination destination) {
+        return (target, data, schematicName) -> {
+            Player player = Minecraft.getInstance().player;
+            if (player == null) return LibraryScreen.LoadResult.failure("No player");
+
+            List<String> droppedTypes = validateBlockNames(data);
+            String error = BG2GadgetHelper.loadTemplate(player, data, destination);
+            if (error != null) return LibraryScreen.LoadResult.failure(error);
+            return droppedTypes.isEmpty()
+                    ? LibraryScreen.LoadResult.dispatched(0)
+                    : LibraryScreen.LoadResult.dispatchedPartial(0, droppedTypes);
+        };
+    }
+    private static final class GadgetUploadSource implements UploadSource {
+        private final UUID preferredGadget;
+        private final ItemStack icon;
+        private final String name;
+
+        private GadgetUploadSource(ItemStack gadget) {
+            this.preferredGadget = GadgetNBT.getUUID(gadget);
+            this.icon = gadget.copy();
+            this.name = gadget.getHoverName().getString();
+        }
+
+        @Override public String displayName() { return name; }
+        @Override public ItemStack icon() { return icon; }
+        @Override public boolean isReady() {
+            for (ClipboardEntry clip : SchematiCraftState.get().getClipboard()) {
+                ArrayList<StatePos> data = ClipboardPreviewRenderer.get()
+                        .getClientData(clip.getGadgetUuid());
+                if (data != null && !data.isEmpty()) return true;
+            }
+            return false;
+        }
 
         @Override
         public List<Candidate> listCandidates() {
+            List<ClipboardEntry> clips = new ArrayList<>(
+                    SchematiCraftState.get().getClipboard());
+            clips.sort(Comparator.comparing(
+                    clip -> !clip.getGadgetUuid().equals(preferredGadget)));
             List<Candidate> out = new ArrayList<>();
-            for (ClipboardEntry clip : SchematiCraftState.get().getClipboard()) {
-                out.add(new Candidate(
-                        clip.getGadgetUuid().toString(),
-                        clip.getDisplayName(),
-                        clip.getTimeAgo()));
+            for (ClipboardEntry clip : clips) {
+                out.add(new Candidate(clip.getGadgetUuid().toString(),
+                        clip.getDisplayName(), clip.getTimeAgo()));
             }
             return out;
         }
 
-        @Override
-        public String emptyHint() {
-            return "Copy a build with your Copy/Paste gadget first";
+        @Override public String emptyHint() {
+            return "Copy or cut a build with this gadget first";
         }
 
         @Override
-        public CompletableFuture<Boolean> upload(String candidateId, String title,
-                                                 String description, String bundleId,
-                                                 List<Path> images) {
-            UUID gadgetUuid;
+        public CompletableFuture<Boolean> upload(
+                String candidateId, String title, String description,
+                String bundleId, List<Path> images) {
+            UUID id;
             try {
-                gadgetUuid = UUID.fromString(candidateId);
+                id = UUID.fromString(candidateId);
             } catch (IllegalArgumentException e) {
                 return CompletableFuture.failedFuture(
-                        new IllegalStateException("Invalid copy reference"));
+                        new IllegalStateException("Invalid gadget copy"));
             }
-
-            var statePosList = ClipboardPreviewRenderer.get().getClientData(gadgetUuid);
-            if (statePosList == null || statePosList.isEmpty()) {
-                return CompletableFuture.failedFuture(new IllegalStateException(
-                        "No block data for this copy. Re-copy the build and try again."));
-            }
-
-            return com.schematicraft.bg2addon.network.SchematiCraftAPIWrapper.get()
-                    .uploadFromClient(statePosList, title, description, bundleId, images);
+            ArrayList<StatePos> data = ClipboardPreviewRenderer.get().getClientData(id);
+            return uploadStatePositions(data, title, description, bundleId, images,
+                    "Re-copy the build and try again");
         }
     }
 
-    /**
-     * Validates block names in a BG2 JSON template against the game registry.
-     * Returns a list of block names that don't exist in the current game.
-     */
+    private static final class TemplateUploadSource implements UploadSource {
+        @Override public String displayName() { return "Template slot"; }
+        @Override public ItemStack icon() {
+            return BG2GadgetHelper.templateSlotContents(Minecraft.getInstance().player).copy();
+        }
+        @Override public boolean isReady() {
+            ItemStack stack = icon();
+            if (stack.isEmpty()) return false;
+            ArrayList<StatePos> data = BG2DataClient.getLookupFromUUID(
+                    GadgetNBT.getUUID(stack));
+            return data != null && !data.isEmpty();
+        }
+
+        @Override
+        public List<Candidate> listCandidates() {
+            ItemStack stack = icon();
+            if (stack.isEmpty()) return List.of();
+            UUID id = GadgetNBT.getUUID(stack);
+            ArrayList<StatePos> data = BG2DataClient.getLookupFromUUID(id);
+            if (data == null || data.isEmpty()) return List.of();
+            return List.of(new Candidate(id.toString(),
+                    stack.getHoverName().getString(), data.size() + " blocks"));
+        }
+
+        @Override public String emptyHint() {
+            return "Save or load a template into slot 1 first";
+        }
+
+        @Override
+        public CompletableFuture<Boolean> upload(
+                String candidateId, String title, String description,
+                String bundleId, List<Path> images) {
+            UUID id;
+            try {
+                id = UUID.fromString(candidateId);
+            } catch (IllegalArgumentException e) {
+                return CompletableFuture.failedFuture(
+                        new IllegalStateException("Invalid template"));
+            }
+
+            ItemStack current = BG2GadgetHelper.templateSlotContents(
+                    Minecraft.getInstance().player);
+            if (current.isEmpty() || !id.equals(GadgetNBT.getUUID(current))) {
+                return CompletableFuture.failedFuture(
+                        new IllegalStateException(
+                                "Template slot changed. Reopen upload and try again."));
+            }
+
+            ArrayList<StatePos> data = BG2DataClient.getLookupFromUUID(id);
+            return uploadStatePositions(data, title, description, bundleId, images,
+                    "Template data is not ready. Reopen the manager and try again.");
+        }
+    }
+    private static CompletableFuture<Boolean> uploadStatePositions(
+            ArrayList<StatePos> data, String title, String description,
+            String bundleId, List<Path> images, String missingHint) {
+        if (data == null || data.isEmpty()) {
+            return CompletableFuture.failedFuture(
+                    new IllegalStateException(missingHint));
+        }
+        return com.schematicraft.bg2addon.network.SchematiCraftAPIWrapper.get()
+                .uploadFromClient(data, title, description, bundleId, images);
+    }
+
     private static List<String> validateBlockNames(byte[] templateData) {
         List<String> dropped = new ArrayList<>();
         try {
-            String json = new String(templateData);
-            JsonObject root = JsonParser.parseString(json).getAsJsonObject();
+            JsonObject root = JsonParser.parseString(new String(templateData))
+                    .getAsJsonObject();
             if (!root.has("statePosArrayList")) return dropped;
 
-            CompoundTag nbt = TagParser.parseTag(root.get("statePosArrayList").getAsString());
+            CompoundTag nbt = TagParser.parseTag(
+                    root.get("statePosArrayList").getAsString());
             ListTag blockstateMap = nbt.getList("blockstatemap", 10);
-
             for (int i = 0; i < blockstateMap.size(); i++) {
                 String name = blockstateMap.getCompound(i).getString("Name");
                 if (name.equals("minecraft:air")) continue;
-                ResourceLocation rl = ResourceLocation.tryParse(name);
-                if (rl == null || !BuiltInRegistries.BLOCK.containsKey(rl)) {
+                ResourceLocation id = ResourceLocation.tryParse(name);
+                if (id == null || !BuiltInRegistries.BLOCK.containsKey(id)) {
                     dropped.add(name);
                 }
             }
         } catch (Exception e) {
-            SchematiCraftBG2.LOGGER.debug("Block validation failed: {}", e.getMessage());
+            SchematiCraftBG2.LOGGER.debug(
+                    "Block validation failed: {}", e.getMessage());
         }
         return dropped;
     }

@@ -51,8 +51,6 @@ public class SchematiCraftMod {
             if (FMLEnvironment.dist.isClient()) {
                 modEventBus.addListener(
                     com.schematicraft.bg2addon.client.ClientSetup::onClientSetup);
-                modEventBus.addListener(
-                    com.schematicraft.bg2addon.client.ClientSetup::registerKeyMappings);
 
                 // Radial launcher and the Template Manager button.
                 NeoForge.EVENT_BUS.addListener(
@@ -60,9 +58,7 @@ public class SchematiCraftMod {
                 NeoForge.EVENT_BUS.addListener(
                     com.schematicraft.bg2addon.client.TemplateManagerIntegration::onScreenInit);
 
-                // Keybind handling and server-mode reset on logout.
-                NeoForge.EVENT_BUS.addListener(
-                    com.schematicraft.bg2addon.client.ClientEvents::onKeyInput);
+                // Server-mode reset and BG2 keybind isolation.
                 NeoForge.EVENT_BUS.addListener(
                     com.schematicraft.bg2addon.client.ClientEvents::onDisconnect);
                 // Keeps BG2 keybinds from firing while our screens are open.
@@ -82,6 +78,15 @@ public class SchematiCraftMod {
         }
 
         if (FMLEnvironment.dist.isClient()) {
+            // Shared controls and browsing work even when only a future editor
+            // integration is installed.
+            modEventBus.addListener(
+                com.schematicraft.client.ClientSetup::registerKeyMappings);
+            NeoForge.EVENT_BUS.addListener(
+                com.schematicraft.client.GlobalClientEvents::onKeyInput);
+            NeoForge.EVENT_BUS.addListener(
+                com.schematicraft.client.GlobalClientEvents::onDisconnect);
+
             com.schematicraft.lib.network.SchematiCraftAPIWrapper.get()
                 .setClientIdentifier("schematicraft/0.3.0 (neoforge)");
         }
