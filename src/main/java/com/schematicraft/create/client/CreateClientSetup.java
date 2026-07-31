@@ -29,6 +29,13 @@ public final class CreateClientSetup {
     public static final TargetDevice.Type TARGET =
             TargetDevice.Type.of("create:schematic_table");
 
+    /**
+     * Device name shared by the download target and the upload source, so
+     * "Download to" and "Upload from" name the same place identically. The
+     * selected filename is content and belongs on the candidate, not here.
+     */
+    private static final String TABLE_DEVICE = "Schematic Table";
+
     private CreateClientSetup() {}
 
     public static void onClientSetup(FMLClientSetupEvent event) {
@@ -39,7 +46,7 @@ public final class CreateClientSetup {
                         "very large structures stall the client"));
 
         TargetCatalog.register(new TargetCatalog.Entry(
-                TARGET, "Schematic Table", "create:schematic_table",
+                TARGET, TABLE_DEVICE, "create:schematic_table",
                 "Open a Schematic Table", "Add to Create",
                 "Written to Create's schematics folder", "Create",
                 "nbt", "Create"));
@@ -115,7 +122,7 @@ public final class CreateClientSetup {
 
         @Override
         public String displayName() {
-            return file.getFileName().toString();
+            return TABLE_DEVICE;
         }
 
         @Override
@@ -132,8 +139,10 @@ public final class CreateClientSetup {
         @Override
         public List<Candidate> listCandidates() {
             Path current = currentFile();
+            // The candidate carries the filename. displayName() is the device.
             return current != null
-                    ? List.of(new Candidate(current.toString(), displayName(), "Create file"))
+                    ? List.of(new Candidate(current.toString(),
+                            current.getFileName().toString(), "Create file"))
                     : List.of();
         }
 

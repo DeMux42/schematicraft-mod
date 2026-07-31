@@ -47,6 +47,9 @@ public class SchematiCraftMod {
                 com.schematicraft.bg2addon.network.ModNetworking::registerPayloads);
             NeoForge.EVENT_BUS.addListener(
                 com.schematicraft.bg2addon.integration.ServerEvents::onServerTick);
+            // Releases per-player clipboard snapshots and rate-limit state.
+            NeoForge.EVENT_BUS.addListener(
+                com.schematicraft.bg2addon.integration.ServerEvents::onPlayerLoggedOut);
 
             if (FMLEnvironment.dist.isClient()) {
                 modEventBus.addListener(

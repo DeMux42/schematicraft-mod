@@ -9,7 +9,10 @@ version = mod_version
 group = mod_group_id
 
 repositories {
-    mavenLocal()
+    // mavenLocal() is intentionally absent. It takes precedence over remote
+    // repositories, so a stale or poisoned artifact in the local cache would
+    // silently enter the build. Add it temporarily and locally if you need to
+    // test an unpublished dependency.
     mavenCentral()
     maven { url = "https://maven.createmod.net" }
     maven { url = "https://maven.ithundxr.dev/snapshots" }
@@ -74,15 +77,37 @@ configurations {
     runtimeClasspath.extendsFrom localRuntime
 }
 
+// Both editors are optional at runtime. Their types are referenced directly by
+// the integration code, so they are always needed on the compile classpath, but
+// each can be left off the runtime classpath to verify that the mod degrades
+// correctly when that editor is not installed:
+//
+//   gradlew runClient -PwithBG2=false
+//   gradlew runClient -PwithCreate=false
+//   gradlew runClient -PwithBG2=false -PwithCreate=false
+//
+// Both default to true, so a normal dev run is unchanged.
+def withBG2 = Boolean.parseBoolean((findProperty('withBG2') ?: 'true').toString())
+def withCreate = Boolean.parseBoolean((findProperty('withCreate') ?: 'true').toString())
+
 dependencies {
-    // Building Gadgets 2 (optional at runtime, from CurseMaven - project 298187, file 6850515 = v1.3.9 for 1.21.1)
-    implementation "curse.maven:building-gadgets-298187:6850515"
+    // Building Gadgets 2 (CurseMaven project 298187, file 6850515 = v1.3.9 for 1.21.1)
+    compileOnly "curse.maven:building-gadgets-298187:6850515"
 
     // Curios API - required by BG2 at runtime (project 309927, file 6529130 = v9.5.1+1.21.1)
-    implementation "curse.maven:curios-309927:6529130"
+    compileOnly "curse.maven:curios-309927:6529130"
 
-    // Create mod (optional at runtime, from CurseMaven - file 7178775 = v6.0.8 for 1.21.1)
-    implementation "curse.maven:create-328085:7178775"
+    // Create mod (CurseMaven project 328085, file 7178775 = v6.0.8 for 1.21.1)
+    compileOnly "curse.maven:create-328085:7178775"
+
+    if (withBG2) {
+        localRuntime "curse.maven:building-gadgets-298187:6850515"
+        localRuntime "curse.maven:curios-309927:6529130"
+    }
+
+    if (withCreate) {
+        localRuntime "curse.maven:create-328085:7178775"
+    }
 
     // Gson is bundled with MC, declared for clarity
     compileOnly 'com.google.code.gson:gson:2.10.1'

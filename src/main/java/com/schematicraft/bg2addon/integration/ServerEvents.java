@@ -1,5 +1,8 @@
 package com.schematicraft.bg2addon.integration;
 
+import com.schematicraft.bg2addon.network.ServerOperationLimits;
+import net.minecraft.server.level.ServerPlayer;
+import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
 /**
@@ -24,6 +27,23 @@ public class ServerEvents {
 
         for (var player : server.getPlayerList().getPlayers()) {
             ClipboardTracker.checkForNewCopy(player);
+        }
+    }
+
+    /**
+     * Release per-player server state on disconnect: copy tracking, rate-limit
+     * history, and clipboard snapshots stored in BG2 world data.
+     */
+    public static void onPlayerLoggedOut(PlayerEvent.PlayerLoggedOutEvent event) {
+        if (!(event.getEntity() instanceof ServerPlayer player)) return;
+
+        var playerId = player.getUUID();
+        ClipboardTracker.forgetPlayer(playerId);
+        ServerOperationLimits.forget(playerId);
+
+        var server = player.getServer();
+        if (server != null) {
+            ServerClipboardRegistry.forgetPlayer(playerId, server.overworld());
         }
     }
 }

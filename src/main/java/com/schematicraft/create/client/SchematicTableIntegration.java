@@ -3,10 +3,12 @@ package com.schematicraft.create.client;
 import com.mojang.logging.LogUtils;
 import com.simibubi.create.content.schematics.table.SchematicTableScreen;
 import com.schematicraft.lib.client.gui.LibraryScreen;
+import com.schematicraft.lib.client.gui.SchematicraftButton;
 import com.schematicraft.lib.client.screen.ApiKeyScreen;
 import com.schematicraft.lib.config.ModConfig;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.network.chat.Component;
 import net.neoforged.neoforge.client.event.ScreenEvent;
@@ -31,6 +33,15 @@ public class SchematicTableIntegration {
     private static final Logger LOGGER = LogUtils.getLogger();
 
     /**
+     * Reserved height for Create's centered Schematic Table window.
+     *
+     * Create's window is shorter than a standard container panel. This is a
+     * conservative reserve so the button clears it even at high GUI scales,
+     * without reading Create internals that ship without their catnip dependency.
+     */
+    private static final int TABLE_PANEL_HEIGHT = 140;
+
+    /**
      * Filename to preselect when Create exposes it in the Schematic Table.
      *
      * The name remains pending while Create refreshes its list. It is cleared
@@ -48,26 +59,31 @@ public class SchematicTableIntegration {
 
         applyPendingSelection(screen);
 
-        // Position the button near Create's existing buttons (top-right area)
-        int btnX = (screen.width / 2) + 90;
-        int btnY = (screen.height / 2) - 70;
-        int btnW = 70;
-        int btnH = 16;
+        // Standard placement, matching every other editor screen.
+        int btnX = SchematicraftButton.centeredX(screen.width);
+        int btnY = SchematicraftButton.standardY(screen.height, TABLE_PANEL_HEIGHT);
 
         if (!ModConfig.hasApiKey()) {
             event.addListener(Button.builder(
-                    Component.literal("\u00a7bSchematicraft"),
+                    SchematicraftButton.label(false),
                     b -> Minecraft.getInstance().setScreen(new ApiKeyScreen(screen))
-            ).bounds(btnX, btnY, btnW, btnH).build());
+            ).bounds(btnX, btnY, SchematicraftButton.WIDTH, SchematicraftButton.HEIGHT)
+                    .tooltip(Tooltip.create(SchematicraftButton.setupTooltip()))
+                    .build());
             return;
         }
 
         event.addListener(Button.builder(
-                Component.literal("\u00a7aSchematicraft"),
+                SchematicraftButton.label(true),
                 b -> Minecraft.getInstance().setScreen(new LibraryScreen(
                         CreateClientSetup.tableJourney(
                                 screen, selectedSchematicFile(screen))))
-        ).bounds(btnX, btnY, btnW, btnH).build());
+        ).bounds(btnX, btnY, SchematicraftButton.WIDTH, SchematicraftButton.HEIGHT)
+                .tooltip(Tooltip.create(Component.literal(
+                        "Browse your cloud library.\n"
+                        + "Downloads are written to Create's schematics folder "
+                        + "and selected here automatically.")))
+                .build());
     }
 
     /** Selected local filename at the moment the Schematicraft button is used. */

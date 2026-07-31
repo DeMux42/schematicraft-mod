@@ -52,12 +52,39 @@ public class LoadTemplateHandler {
                 return;
             }
 
+            // A modified client can send this packet directly, so rate limit
+            // before doing any parsing work.
+            if (!ServerOperationLimits.allowOperation(player.getUUID())) {
+                player.displayClientMessage(
+                        Component.literal("\u00a7cToo many template loads. Wait a moment."), true);
+                return;
+            }
+
+            // Bound the payload before decoding it into a state list.
+            if (!ServerOperationLimits.isWithinSizeLimit(payload.templateData())) {
+                player.displayClientMessage(
+                        Component.literal("\u00a7cTemplate is too large to load."), true);
+                SchematiCraftBG2.LOGGER.warn("Rejected oversized template from player {}",
+                        player.getName().getString());
+                return;
+            }
+
             try {
                 ArrayList<StatePos> buildList = BG2Data.statePosListFromNBTMapArray(payload.templateData());
 
                 if (buildList.isEmpty()) {
                     player.displayClientMessage(
                             Component.literal("\u00a7cTemplate is empty or invalid."), true);
+                    return;
+                }
+
+                // Reject before writing to persistent BG2 world data.
+                if (buildList.size() > ServerOperationLimits.MAX_BLOCKS) {
+                    player.displayClientMessage(
+                            Component.literal("\u00a7cTemplate exceeds the "
+                                    + ServerOperationLimits.MAX_BLOCKS + " block limit."), true);
+                    SchematiCraftBG2.LOGGER.warn("Rejected template with {} blocks from player {}",
+                            buildList.size(), player.getName().getString());
                     return;
                 }
 
@@ -85,8 +112,9 @@ public class LoadTemplateHandler {
 
             } catch (Exception e) {
                 SchematiCraftBG2.LOGGER.error("Failed to load template: {}", e.getMessage(), e);
+                // Keep server-side detail in the log, not in the player message.
                 player.displayClientMessage(
-                        Component.literal("\u00a7cFailed to load template: " + e.getMessage()), true);
+                        Component.literal("\u00a7cFailed to load template."), true);
             }
         });
     }

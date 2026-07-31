@@ -32,8 +32,14 @@ public class ClipboardPreviewRenderer {
     private static final ClipboardPreviewRenderer INSTANCE = new ClipboardPreviewRenderer();
     public static ClipboardPreviewRenderer get() { return INSTANCE; }
 
+    /** Maximum cached previews. The server retains fewer snapshots per player. */
+    private static final int MAX_CACHED_PREVIEWS = 32;
+
     /** Client-side cache of StatePos data keyed by clipboard UUID */
     private final Map<UUID, ArrayList<StatePos>> clientCache = new ConcurrentHashMap<>();
+
+    /** Insertion order for bounding {@link #clientCache}. */
+    private final java.util.Deque<UUID> cacheOrder = new java.util.ArrayDeque<>();
 
     private UUID preparedUuid = null;
     private Map<RenderType, VertexBuffer> vertexBuffers = null;
@@ -49,11 +55,34 @@ public class ClipboardPreviewRenderer {
     private ClipboardPreviewRenderer() {}
 
     public void cacheClientData(UUID uuid, ArrayList<StatePos> data) {
-        clientCache.put(uuid, data);
+        if (uuid == null || data == null) {
+            return;
+        }
+
+        // Bound the cache so repeated copies cannot grow it without limit.
+        synchronized (cacheOrder) {
+            if (clientCache.put(uuid, data) == null) {
+                cacheOrder.addLast(uuid);
+            }
+            while (cacheOrder.size() > MAX_CACHED_PREVIEWS) {
+                UUID oldest = cacheOrder.pollFirst();
+                if (oldest != null && !oldest.equals(uuid)) {
+                    clientCache.remove(oldest);
+                }
+            }
+        }
     }
 
     public ArrayList<StatePos> getClientData(UUID uuid) {
         return clientCache.get(uuid);
+    }
+
+    /** Drop all cached preview data, for example on disconnect. */
+    public void clearClientData() {
+        synchronized (cacheOrder) {
+            clientCache.clear();
+            cacheOrder.clear();
+        }
     }
 
     /**

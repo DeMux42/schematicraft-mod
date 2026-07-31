@@ -2,6 +2,7 @@ package com.schematicraft.bg2addon.client;
 
 import com.direwolf20.buildinggadgets2.client.screen.TemplateManagerGUI;
 import com.schematicraft.lib.client.gui.LibraryScreen;
+import com.schematicraft.lib.client.gui.SchematicraftButton;
 import com.schematicraft.lib.config.ModConfig;
 import com.schematicraft.lib.client.screen.ApiKeyScreen;
 import net.minecraft.client.Minecraft;
@@ -27,31 +28,32 @@ import net.neoforged.neoforge.client.event.ScreenEvent;
  */
 public class TemplateManagerIntegration {
 
+    /** Height of BG2's vertically centered Template Manager panel. */
+    private static final int TEMPLATE_MANAGER_PANEL_HEIGHT = 166;
+
     public static void onScreenInit(ScreenEvent.Init.Post event) {
         if (!(event.getScreen() instanceof TemplateManagerGUI gui)) return;
 
-        // Position below the Template Manager GUI, centered
-        // BG2's Template Manager is 176px wide, centered on screen
-        int guiLeft = (gui.width - 176) / 2;
-        int guiTop = (gui.height - 166) / 2;
-        int btnW = 90;
-        int btnH = 16;
-        int btnX = guiLeft + 4; // Left-aligned under the GUI
-        int btnY = guiTop + 166 + 10; // 10px below the GUI
+        // Standard placement. BG2's Template Manager panel is 166px tall and
+        // vertically centered, so it is the reserved region to stay clear of.
+        int btnX = SchematicraftButton.centeredX(gui.width);
+        int btnY = SchematicraftButton.standardY(gui.height, TEMPLATE_MANAGER_PANEL_HEIGHT);
 
         if (!ModConfig.hasApiKey()) {
             event.addListener(Button.builder(
-                    Component.literal("\u00a7bSchematicraft"),
+                    SchematicraftButton.label(false),
                     b -> Minecraft.getInstance().setScreen(new ApiKeyScreen(gui))
-            ).bounds(btnX, btnY, btnW, btnH).build());
+            ).bounds(btnX, btnY, SchematicraftButton.WIDTH, SchematicraftButton.HEIGHT)
+                    .tooltip(Tooltip.create(SchematicraftButton.setupTooltip()))
+                    .build());
             return;
         }
 
         event.addListener(Button.builder(
-                Component.literal("\u00a7a\u2601 Schematicraft"),
+                SchematicraftButton.label(true),
                 b -> Minecraft.getInstance().setScreen(
                         new LibraryScreen(ClientSetup.templateJourney(gui)))
-        ).bounds(btnX, btnY, btnW, btnH)
+        ).bounds(btnX, btnY, SchematicraftButton.WIDTH, SchematicraftButton.HEIGHT)
                 .tooltip(Tooltip.create(Component.literal(
                         "Browse your cloud library.\n"
                         + "Loads into the template slot, so put paper there first. "

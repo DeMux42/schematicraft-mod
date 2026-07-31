@@ -14,6 +14,9 @@ public final class ClientEvents {
 
     public static void onDisconnect(ClientPlayerNetworkEvent.LoggingOut event) {
         ServerMode.reset();
+        // Clipboard entries and previews belong to the session that created them.
+        com.schematicraft.bg2addon.core.SchematiCraftState.get().clearClipboard();
+        ClipboardPreviewRenderer.get().clearClientData();
     }
 
     /** Drain BG2 actions while a Schematicraft screen owns keyboard input. */

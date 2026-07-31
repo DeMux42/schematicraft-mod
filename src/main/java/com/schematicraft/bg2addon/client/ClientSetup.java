@@ -46,6 +46,20 @@ public final class ClientSetup {
     public static final TargetDevice.Type TEMPLATE_TARGET =
             TargetDevice.Type.of("buildinggadgets2:template_manager");
 
+    /**
+     * Device names shared by the download target and the upload source.
+     *
+     * One constant per device, used on both sides, so "Download to" and
+     * "Upload from" can never drift apart again. These name the device, not the
+     * content: the specific copy or template being uploaded is a candidate.
+     *
+     * Deliberately unqualified. "Held" and the mod name are already covered by
+     * the how-to and destination hints, and repeating them here would duplicate
+     * text visible on the same screen.
+     */
+    private static final String GADGET_DEVICE = "Copy/Paste Gadget";
+    private static final String TEMPLATE_DEVICE = "Template Manager";
+
     private ClientSetup() {}
 
     public static void onClientSetup(FMLClientSetupEvent event) {
@@ -60,12 +74,12 @@ public final class ClientSetup {
         LibraryScreen.setLoadLimits(GADGET_TARGET, limits);
         LibraryScreen.setLoadLimits(TEMPLATE_TARGET, limits);
         TargetCatalog.register(new TargetCatalog.Entry(
-                GADGET_TARGET, "Held BG2 Gadget",
+                GADGET_TARGET, GADGET_DEVICE,
                 "buildinggadgets2:gadget_copy_paste", "Hold a Copy/Paste or Cut/Paste Gadget",
                 "Load into Gadget", "Goes into the gadget you are holding",
                 "gadget", "json", "BuildingGadgets"));
         TargetCatalog.register(new TargetCatalog.Entry(
-                TEMPLATE_TARGET, "Template Manager",
+                TEMPLATE_TARGET, TEMPLATE_DEVICE,
                 "buildinggadgets2:template_manager", "Open one with paper in slot 1",
                 "Load into Template", "Goes into slot 1. No gadget needed.",
                 "template", "json", "BuildingGadgets",
@@ -128,15 +142,16 @@ public final class ClientSetup {
     private static final class GadgetUploadSource implements UploadSource {
         private final UUID preferredGadget;
         private final ItemStack icon;
-        private final String name;
 
         private GadgetUploadSource(ItemStack gadget) {
             this.preferredGadget = GadgetNBT.getUUID(gadget);
             this.icon = gadget.copy();
-            this.name = gadget.getHoverName().getString();
         }
 
-        @Override public String displayName() { return name; }
+        // Names the device, matching the download target. The exact gadget is
+        // still identifiable from the icon, and the specific copy from the
+        // candidate list.
+        @Override public String displayName() { return GADGET_DEVICE; }
         @Override public ItemStack icon() { return icon; }
         @Override public boolean isReady() {
             for (ClipboardEntry clip : SchematiCraftState.get().getClipboard()) {
@@ -183,7 +198,7 @@ public final class ClientSetup {
     }
 
     private static final class TemplateUploadSource implements UploadSource {
-        @Override public String displayName() { return "Template slot"; }
+        @Override public String displayName() { return TEMPLATE_DEVICE; }
         @Override public ItemStack icon() {
             return BG2GadgetHelper.templateSlotContents(Minecraft.getInstance().player).copy();
         }

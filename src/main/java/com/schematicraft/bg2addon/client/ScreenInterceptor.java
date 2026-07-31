@@ -5,11 +5,12 @@ import com.direwolf20.buildinggadgets2.common.items.BaseGadget;
 import com.direwolf20.buildinggadgets2.common.items.GadgetCopyPaste;
 import com.direwolf20.buildinggadgets2.common.items.GadgetCutPaste;
 import com.schematicraft.lib.client.gui.LibraryScreen;
-import com.schematicraft.lib.client.gui.TargetDevice;
+import com.schematicraft.lib.client.gui.SchematicraftButton;
 import com.schematicraft.lib.client.screen.ApiKeyScreen;
 import com.schematicraft.lib.config.ModConfig;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.network.chat.Component;
 import net.neoforged.neoforge.client.event.ScreenEvent;
 
@@ -26,8 +27,14 @@ import net.neoforged.neoforge.client.event.ScreenEvent;
  */
 public class ScreenInterceptor {
 
-    private static final int BTN_W = 96;
-    private static final int BTN_H = 16;
+    /**
+     * Reserved diameter for BG2's mode wheel.
+     *
+     * The radial has no rectangular panel, but it does own the center of the
+     * screen. Reserving a nominal diameter keeps the button clear of the ring at
+     * small window sizes, where the plain three-quarter line would clip it.
+     */
+    private static final int MODE_WHEEL_DIAMETER = 160;
 
     public static void onScreenOpen(ScreenEvent.Init.Post event) {
         if (!(event.getScreen() instanceof ModeRadialMenu screen)) return;
@@ -40,26 +47,32 @@ public class ScreenInterceptor {
         if (!(gadget.getItem() instanceof GadgetCopyPaste)
                 && !(gadget.getItem() instanceof GadgetCutPaste)) return;
 
-        // Bottom center, clear of BG2's mode wheel in the middle of the screen.
-        int x = (screen.width - BTN_W) / 2;
-        int y = screen.height - 30;
+        // Standard placement, clear of BG2's mode wheel in the screen center.
+        int x = SchematicraftButton.centeredX(screen.width);
+        int y = SchematicraftButton.standardY(screen.height, MODE_WHEEL_DIAMETER);
 
         if (!ModConfig.hasApiKey()) {
             event.addListener(Button.builder(
-                    Component.literal("\u00a7bSchematicraft"),
+                    SchematicraftButton.label(false),
                     b -> mc.setScreen(new ApiKeyScreen(null))
-            ).bounds(x, y, BTN_W, BTN_H).build());
+            ).bounds(x, y, SchematicraftButton.WIDTH, SchematicraftButton.HEIGHT)
+                    .tooltip(Tooltip.create(SchematicraftButton.setupTooltip()))
+                    .build());
             return;
         }
 
         event.addListener(Button.builder(
-                Component.literal("\u00a7a\u2601 Schematicraft"),
+                SchematicraftButton.label(true),
                 b -> {
                     var journey = ClientSetup.resolveHeldJourney(mc.player);
                     mc.setScreen(new LibraryScreen(
                             journey != null ? journey
                                     : com.schematicraft.lib.client.gui.EditorJourney.browse()));
                 }
-        ).bounds(x, y, BTN_W, BTN_H).build());
+        ).bounds(x, y, SchematicraftButton.WIDTH, SchematicraftButton.HEIGHT)
+                .tooltip(Tooltip.create(Component.literal(
+                        "Browse your cloud library.\n"
+                        + "Loads into the gadget you are holding.")))
+                .build());
     }
 }

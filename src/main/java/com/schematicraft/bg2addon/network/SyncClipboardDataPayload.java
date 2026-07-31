@@ -14,6 +14,7 @@ import java.util.UUID;
  */
 public record SyncClipboardDataPayload(
         UUID clipboardUuid,
+        UUID copyUuid,
         CompoundTag statePosNbt
 ) implements CustomPacketPayload {
 
@@ -28,14 +29,16 @@ public record SyncClipboardDataPayload(
             new StreamCodec<>() {
                 @Override
                 public SyncClipboardDataPayload decode(FriendlyByteBuf buf) {
-                    UUID uuid = buf.readUUID();
+                    UUID clipboardUuid = buf.readUUID();
+                    UUID copyUuid = buf.readUUID();
                     CompoundTag nbt = buf.readNbt();
-                    return new SyncClipboardDataPayload(uuid, nbt);
+                    return new SyncClipboardDataPayload(clipboardUuid, copyUuid, nbt);
                 }
 
                 @Override
                 public void encode(FriendlyByteBuf buf, SyncClipboardDataPayload p) {
                     buf.writeUUID(p.clipboardUuid);
+                    buf.writeUUID(p.copyUuid);
                     buf.writeNbt(p.statePosNbt);
                 }
             };
