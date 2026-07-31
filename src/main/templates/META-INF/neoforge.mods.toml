@@ -8,6 +8,10 @@ version = "${mod_version}"
 displayName = "${mod_name}"
 authors = "${mod_authors}"
 description = '''${mod_description}'''
+logoFile = "logo.png"
+displayURL = "${mod_display_url}"
+issueTrackerURL = "${mod_issue_tracker_url}"
+credits = "${mod_credits}"
 
 [[accessTransformers]]
 file = "META-INF/accesstransformer.cfg"
