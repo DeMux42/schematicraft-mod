@@ -238,7 +238,7 @@ Distributed under the GNU Lesser General Public License v3.0. See [`LICENSE`](LI
 
 <p align="right"><a href="#readme-top">Back to top</a></p>
 
-[release-shield]: https://img.shields.io/github/v/release/DeMux42/schematicraft-mod?sort=semver
+[release-shield]: https://img.shields.io/github/v/release/DeMux42/schematicraft-mod?include_prereleases&sort=semver
 [license-shield]: https://img.shields.io/badge/license-LGPL--3.0-blue.svg
 [license-url]: LICENSE
 [mc-shield]: https://img.shields.io/badge/Minecraft-1.21.1-brightgreen.svg
