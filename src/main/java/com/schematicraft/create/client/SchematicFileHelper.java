@@ -33,8 +33,15 @@ public class SchematicFileHelper {
 			Path dir = CreatePaths.SCHEMATICS_DIR;
 			Files.createDirectories(dir);
 
-			// Sanitize filename
-			String safe = filename.replaceAll("[^a-zA-Z0-9._\\- ]", "_");
+			// Sanitize filename. Schematic titles are user text, so this has to
+			// survive punctuation, emoji, and a title that reduces to nothing.
+			String safe = filename == null ? "" : filename.trim();
+			safe = safe.replaceAll("[^a-zA-Z0-9._\\- ]", "_").trim();
+			// Long titles exist and some filesystems cap a path segment at 255.
+			if (safe.length() > 60)
+				safe = safe.substring(0, 60).trim();
+			if (safe.isEmpty() || safe.equals("."))
+				safe = "schematic";
 			if (!safe.endsWith(".nbt"))
 				safe += ".nbt";
 

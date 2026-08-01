@@ -6,7 +6,7 @@ import com.direwolf20.buildinggadgets2.common.items.GadgetCutPaste;
 import com.direwolf20.buildinggadgets2.common.worlddata.BG2Data;
 import com.direwolf20.buildinggadgets2.util.GadgetNBT;
 import com.direwolf20.buildinggadgets2.util.datatypes.StatePos;
-import com.schematicraft.SchematiCraftMod;
+import com.schematicraft.bg2addon.SchematiCraftBG2;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -26,18 +26,46 @@ public class LoadTemplateHandler {
     public void handle(final LoadTemplatePayload payload, final IPayloadContext context) {
         context.enqueueWork(() -> {
             Player player = context.player();
-            ItemStack gadgetStack = BaseGadget.getGadget(player);
+            ItemStack foundGadget = BaseGadget.getGadget(player);
 
-            if (gadgetStack.isEmpty()) {
-                player.displayClientMessage(
-                        Component.literal("\u00a7cNo gadget found. Hold a Copy/Paste gadget."), true);
-                return;
+            if (foundGadget.isEmpty()) {
+                // Try to find gadget in Template Manager container if player has one open
+                if (player.containerMenu instanceof com.direwolf20.buildinggadgets2.common.containers.TemplateManagerContainer tmc) {
+                    ItemStack slotStack = tmc.getSlot(0).getItem();
+                    if (!slotStack.isEmpty() && (slotStack.getItem() instanceof GadgetCopyPaste || slotStack.getItem() instanceof GadgetCutPaste)) {
+                        foundGadget = slotStack;
+                    }
+                }
+                if (foundGadget.isEmpty()) {
+                    player.displayClientMessage(
+                            Component.literal("\u00a7cNo gadget found. Hold a Copy/Paste gadget."), true);
+                    return;
+                }
             }
+
+            final ItemStack gadgetStack = foundGadget;
 
             if (!(gadgetStack.getItem() instanceof GadgetCopyPaste)
                     && !(gadgetStack.getItem() instanceof GadgetCutPaste)) {
                 player.displayClientMessage(
                         Component.literal("\u00a7cHold a Copy/Paste gadget to load templates."), true);
+                return;
+            }
+
+            // A modified client can send this packet directly, so rate limit
+            // before doing any parsing work.
+            if (!ServerOperationLimits.allowOperation(player.getUUID())) {
+                player.displayClientMessage(
+                        Component.literal("\u00a7cToo many template loads. Wait a moment."), true);
+                return;
+            }
+
+            // Bound the payload before decoding it into a state list.
+            if (!ServerOperationLimits.isWithinSizeLimit(payload.templateData())) {
+                player.displayClientMessage(
+                        Component.literal("\u00a7cTemplate is too large to load."), true);
+                SchematiCraftBG2.LOGGER.warn("Rejected oversized template from player {}",
+                        player.getName().getString());
                 return;
             }
 
@@ -47,6 +75,16 @@ public class LoadTemplateHandler {
                 if (buildList.isEmpty()) {
                     player.displayClientMessage(
                             Component.literal("\u00a7cTemplate is empty or invalid."), true);
+                    return;
+                }
+
+                // Reject before writing to persistent BG2 world data.
+                if (buildList.size() > ServerOperationLimits.MAX_BLOCKS) {
+                    player.displayClientMessage(
+                            Component.literal("\u00a7cTemplate exceeds the "
+                                    + ServerOperationLimits.MAX_BLOCKS + " block limit."), true);
+                    SchematiCraftBG2.LOGGER.warn("Rejected template with {} blocks from player {}",
+                            buildList.size(), player.getName().getString());
                     return;
                 }
 
@@ -69,13 +107,14 @@ public class LoadTemplateHandler {
                         Component.literal("\u00a7aTemplate loaded (" + buildList.size() + " blocks). Ready to paste."),
                         true);
 
-                SchematiCraftMod.LOGGER.info("Loaded template with {} blocks for player {}",
+                SchematiCraftBG2.LOGGER.info("Loaded template with {} blocks for player {}",
                         buildList.size(), player.getName().getString());
 
             } catch (Exception e) {
-                SchematiCraftMod.LOGGER.error("Failed to load template: {}", e.getMessage(), e);
+                SchematiCraftBG2.LOGGER.error("Failed to load template: {}", e.getMessage(), e);
+                // Keep server-side detail in the log, not in the player message.
                 player.displayClientMessage(
-                        Component.literal("\u00a7cFailed to load template: " + e.getMessage()), true);
+                        Component.literal("\u00a7cFailed to load template."), true);
             }
         });
     }

@@ -6,9 +6,7 @@ import com.direwolf20.buildinggadgets2.common.items.GadgetCutPaste;
 import com.direwolf20.buildinggadgets2.common.worlddata.BG2Data;
 import com.direwolf20.buildinggadgets2.util.GadgetNBT;
 import com.direwolf20.buildinggadgets2.util.datatypes.StatePos;
-import com.schematicraft.SchematiCraftMod;
-import com.schematicraft.bg2addon.core.ClipboardEntry;
-import com.schematicraft.bg2addon.core.SchematiCraftState;
+import com.schematicraft.bg2addon.SchematiCraftBG2;
 import com.schematicraft.bg2addon.network.SyncClipboardDataPayload;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
@@ -17,8 +15,10 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Detects new BG2 copy operations and snapshots them to the Schematicraft clipboard.
@@ -41,7 +41,15 @@ import java.util.UUID;
  */
 public class ClipboardTracker {
 
-    private static UUID lastSeenCopyUuid = null;
+    /**
+     * Last copy UUID already snapshotted, per player.
+     *
+     * <p>This must be per player. A single shared field cannot deduplicate more
+     * than one player: with two players holding gadgets with different copy
+     * UUIDs, each tick would see a value different from the one slot and
+     * re-snapshot both builds indefinitely.
+     */
+    private static final Map<UUID, UUID> LAST_SEEN_BY_PLAYER = new ConcurrentHashMap<>();
 
     /**
      * Check if the player's gadget has a new copy and snapshot it to the clipboard.
@@ -57,9 +65,10 @@ public class ClipboardTracker {
             if (!GadgetNBT.hasCopyUUID(gadget)) return;
 
             UUID copyUuid = GadgetNBT.getCopyUUID(gadget);
-            if (copyUuid.equals(lastSeenCopyUuid)) return;
+            UUID playerId = player.getUUID();
+            if (copyUuid.equals(LAST_SEEN_BY_PLAYER.get(playerId))) return;
 
-            lastSeenCopyUuid = copyUuid;
+            LAST_SEEN_BY_PLAYER.put(playerId, copyUuid);
 
             UUID gadgetUuid = GadgetNBT.getUUID(gadget);
             if (player.level() instanceof ServerLevel serverLevel) {
@@ -74,20 +83,31 @@ public class ClipboardTracker {
                 UUID clipboardUuid = UUID.randomUUID();
                 bg2Data.addToCopyPaste(clipboardUuid, new ArrayList<>(list));
 
-                ClipboardEntry entry = new ClipboardEntry(clipboardUuid, copyUuid, blockCount);
-                SchematiCraftState.get().addToClipboard(entry);
+                // Record the owner and enforce per-player retention. Evicted
+                // snapshots are deleted from world data.
+                ServerClipboardRegistry.record(playerId, clipboardUuid, serverLevel.getServer().overworld());
 
-                // Sync to client for 3D preview rendering
+                // Send to the owning player only. The client builds its own
+                // clipboard list from this packet, so the entry is never shared
+                // through server state.
                 if (player instanceof ServerPlayer serverPlayer) {
                     CompoundTag nbtMap = BG2Data.statePosListToNBTMapArray(new ArrayList<>(list));
-                    serverPlayer.connection.send(new SyncClipboardDataPayload(clipboardUuid, nbtMap));
+                    serverPlayer.connection.send(
+                            new SyncClipboardDataPayload(clipboardUuid, copyUuid, nbtMap));
                 }
 
-                SchematiCraftMod.LOGGER.info("Added copy to clipboard: {} blocks (snapshot {})",
+                SchematiCraftBG2.LOGGER.info("Added copy to clipboard: {} blocks (snapshot {})",
                         blockCount, clipboardUuid.toString().substring(0, 8));
             }
         } catch (Exception e) {
-            SchematiCraftMod.LOGGER.debug("Clipboard check error: {}", e.getMessage());
+            SchematiCraftBG2.LOGGER.debug("Clipboard check error: {}", e.getMessage());
+        }
+    }
+
+    /** Drop per-player copy tracking, for example on disconnect. */
+    public static void forgetPlayer(UUID playerId) {
+        if (playerId != null) {
+            LAST_SEEN_BY_PLAYER.remove(playerId);
         }
     }
 }

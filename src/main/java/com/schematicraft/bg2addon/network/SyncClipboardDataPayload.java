@@ -1,6 +1,6 @@
 package com.schematicraft.bg2addon.network;
 
-import com.schematicraft.SchematiCraftMod;
+import com.schematicraft.bg2addon.SchematiCraftBG2;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
@@ -14,11 +14,12 @@ import java.util.UUID;
  */
 public record SyncClipboardDataPayload(
         UUID clipboardUuid,
+        UUID copyUuid,
         CompoundTag statePosNbt
 ) implements CustomPacketPayload {
 
     public static final Type<SyncClipboardDataPayload> TYPE = new Type<>(
-            ResourceLocation.fromNamespaceAndPath(SchematiCraftMod.MODID, "sync_clipboard_data")
+            ResourceLocation.fromNamespaceAndPath(SchematiCraftBG2.MODID, "sync_clipboard_data")
     );
 
     @Override
@@ -28,14 +29,16 @@ public record SyncClipboardDataPayload(
             new StreamCodec<>() {
                 @Override
                 public SyncClipboardDataPayload decode(FriendlyByteBuf buf) {
-                    UUID uuid = buf.readUUID();
+                    UUID clipboardUuid = buf.readUUID();
+                    UUID copyUuid = buf.readUUID();
                     CompoundTag nbt = buf.readNbt();
-                    return new SyncClipboardDataPayload(uuid, nbt);
+                    return new SyncClipboardDataPayload(clipboardUuid, copyUuid, nbt);
                 }
 
                 @Override
                 public void encode(FriendlyByteBuf buf, SyncClipboardDataPayload p) {
                     buf.writeUUID(p.clipboardUuid);
+                    buf.writeUUID(p.copyUuid);
                     buf.writeNbt(p.statePosNbt);
                 }
             };

@@ -1,6 +1,6 @@
 package com.schematicraft.bg2addon.integration;
 
-import com.schematicraft.SchematiCraftMod;
+import com.schematicraft.bg2addon.SchematiCraftBG2;
 import net.neoforged.fml.ModList;
 
 /**
@@ -15,9 +15,9 @@ public class BG2Integration {
             bg2Loaded = ModList.get().isLoaded("buildinggadgets2");
             checked = true;
             if (bg2Loaded) {
-                SchematiCraftMod.LOGGER.info("Building Gadgets 2 detected, integration enabled");
+                SchematiCraftBG2.LOGGER.info("Building Gadgets 2 detected, integration enabled");
             } else {
-                SchematiCraftMod.LOGGER.info("Building Gadgets 2 not found, running in standalone mode");
+                SchematiCraftBG2.LOGGER.info("Building Gadgets 2 not found, running in standalone mode");
             }
         }
         return bg2Loaded;

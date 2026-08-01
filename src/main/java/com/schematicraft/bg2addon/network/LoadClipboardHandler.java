@@ -6,7 +6,8 @@ import com.direwolf20.buildinggadgets2.common.items.GadgetCutPaste;
 import com.direwolf20.buildinggadgets2.common.worlddata.BG2Data;
 import com.direwolf20.buildinggadgets2.util.GadgetNBT;
 import com.direwolf20.buildinggadgets2.util.datatypes.StatePos;
-import com.schematicraft.SchematiCraftMod;
+import com.schematicraft.bg2addon.SchematiCraftBG2;
+import com.schematicraft.bg2addon.integration.ServerClipboardRegistry;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -42,6 +43,24 @@ public class LoadClipboardHandler {
                 return;
             }
 
+            // This packet carries an arbitrary source UUID and can be sent by a
+            // modified client, so rate limit before touching world data.
+            if (!ServerOperationLimits.allowOperation(player.getUUID())) {
+                player.displayClientMessage(
+                        Component.literal("\u00a7cToo many clipboard loads. Wait a moment."), true);
+                return;
+            }
+
+            // A UUID is an identifier, not an authorization. Only the player who
+            // created the snapshot may load it.
+            if (!ServerClipboardRegistry.isOwner(player.getUUID(), payload.sourceGadgetUuid())) {
+                player.displayClientMessage(
+                        Component.literal("\u00a7cClipboard entry not found."), true);
+                SchematiCraftBG2.LOGGER.warn("Refused clipboard load for a snapshot not owned by player {}",
+                        player.getName().getString());
+                return;
+            }
+
             try {
                 BG2Data bg2Data = BG2Data.get(
                         Objects.requireNonNull(player.level().getServer()).overworld());
@@ -52,6 +71,14 @@ public class LoadClipboardHandler {
                 if (list == null || list.isEmpty()) {
                     player.displayClientMessage(
                             Component.literal("\u00a7cClipboard entry not found or empty."), true);
+                    return;
+                }
+
+                // Bound the copy before it is persisted under a new UUID.
+                if (list.size() > ServerOperationLimits.MAX_BLOCKS) {
+                    player.displayClientMessage(
+                            Component.literal("\u00a7cClipboard entry exceeds the "
+                                    + ServerOperationLimits.MAX_BLOCKS + " block limit."), true);
                     return;
                 }
 
@@ -72,14 +99,15 @@ public class LoadClipboardHandler {
                         Component.literal("\u00a7aLoaded from clipboard (" + list.size() + " blocks). Ready to paste."),
                         true);
 
-                SchematiCraftMod.LOGGER.info("Loaded clipboard entry {} ({} blocks) for player {}",
+                SchematiCraftBG2.LOGGER.info("Loaded clipboard entry {} ({} blocks) for player {}",
                         payload.sourceGadgetUuid().toString().substring(0, 8),
                         list.size(), player.getName().getString());
 
             } catch (Exception e) {
-                SchematiCraftMod.LOGGER.error("Failed to load clipboard entry: {}", e.getMessage(), e);
+                SchematiCraftBG2.LOGGER.error("Failed to load clipboard entry: {}", e.getMessage(), e);
+                // Keep server-side detail in the log, not in the player message.
                 player.displayClientMessage(
-                        Component.literal("\u00a7cFailed to load from clipboard: " + e.getMessage()), true);
+                        Component.literal("\u00a7cFailed to load from clipboard."), true);
             }
         });
     }

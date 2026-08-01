@@ -4,62 +4,75 @@ import com.direwolf20.buildinggadgets2.client.screen.ModeRadialMenu;
 import com.direwolf20.buildinggadgets2.common.items.BaseGadget;
 import com.direwolf20.buildinggadgets2.common.items.GadgetCopyPaste;
 import com.direwolf20.buildinggadgets2.common.items.GadgetCutPaste;
-import com.mojang.logging.LogUtils;
-import com.schematicraft.SchematiCraftMod;
-import com.schematicraft.bg2addon.client.screen.EnhancedRadialMenu;
-import com.schematicraft.lib.network.ServerMode;
+import com.schematicraft.lib.client.gui.LibraryScreen;
+import com.schematicraft.lib.client.gui.SchematicraftButton;
+import com.schematicraft.lib.client.screen.ApiKeyScreen;
+import com.schematicraft.lib.config.ModConfig;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.network.chat.Component;
-import net.minecraft.world.item.ItemStack;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.bus.api.EventPriority;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.ScreenEvent;
-import org.slf4j.Logger;
 
 /**
- * Intercepts BG2's ModeRadialMenu opening for Copy/Paste and Cut/Paste gadgets.
+ * Adds a Schematicraft entry to BG2's Copy/Paste gadget radial menu.
  *
- * Server mode (singleplayer or server has this mod):
- *   Replaces BG2's radial menu with EnhancedRadialMenu, which adds Schematicraft
- *   library/search panels on the left and clipboard/upload panels on the right,
- *   while preserving BG2's mode selection wheel in the center.
+ * The radial is a launcher, not a second library UI. BG2's own mode wheel is
+ * left completely intact; we only add one button that opens the shared
+ * {@link LibraryScreen} with the gadget as the load target. All browsing,
+ * searching, palette apply, and upload live in that one screen.
  *
- * Client-only mode (multiplayer, server does not have this mod):
- *   Lets BG2's normal ModeRadialMenu open unchanged. Mode selection (copy, paste,
- *   build, destroy) still works. Shows a one-time chat message directing the player
- *   to use the Template Manager block for Schematicraft features, because loading
- *   templates into the gadget requires server-side mod support (see BG2GadgetHelper).
+ * Registered manually from the mod entrypoint so this class is only loaded when
+ * Building Gadgets 2 is installed.
  */
 public class ScreenInterceptor {
-    private static final Logger LOGGER = LogUtils.getLogger();
-    private static boolean fallbackMessageShown = false;
 
-    @SubscribeEvent(priority = EventPriority.HIGH)
-    public static void onScreenOpen(ScreenEvent.Opening event) {
-        if (!(event.getScreen() instanceof ModeRadialMenu)) return;
+    /**
+     * Reserved diameter for BG2's mode wheel.
+     *
+     * The radial has no rectangular panel, but it does own the center of the
+     * screen. Reserving a nominal diameter keeps the button clear of the ring at
+     * small window sizes, where the plain three-quarter line would clip it.
+     */
+    private static final int MODE_WHEEL_DIAMETER = 160;
+
+    public static void onScreenOpen(ScreenEvent.Init.Post event) {
+        if (!(event.getScreen() instanceof ModeRadialMenu screen)) return;
 
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) return;
 
-        ItemStack gadget = BaseGadget.getGadget(mc.player);
+        var gadget = BaseGadget.getGadget(mc.player);
         if (gadget.isEmpty()) return;
         if (!(gadget.getItem() instanceof GadgetCopyPaste)
                 && !(gadget.getItem() instanceof GadgetCutPaste)) return;
 
-        if (ServerMode.isDirectModeAvailable()) {
-            // Server mode: full enhanced radial with library, clipboard, upload
-            event.setNewScreen(new EnhancedRadialMenu(gadget));
-        } else {
-            // Client-only mode: let BG2's normal radial open (mode selection still works).
-            // Show a one-time message directing to the Template Manager.
-            if (!fallbackMessageShown) {
-                mc.player.displayClientMessage(
-                        Component.literal(ServerMode.getFallbackMessage()), false);
-                fallbackMessageShown = true;
-            }
-            // Don't intercept. Let the normal ModeRadialMenu show.
+        // Standard placement, clear of BG2's mode wheel in the screen center.
+        int x = SchematicraftButton.centeredX(screen.width);
+        int y = SchematicraftButton.standardY(screen.height, MODE_WHEEL_DIAMETER);
+
+        if (!ModConfig.hasApiKey()) {
+            event.addListener(Button.builder(
+                    SchematicraftButton.label(false),
+                    b -> mc.setScreen(new ApiKeyScreen(null))
+            ).bounds(x, y, SchematicraftButton.WIDTH, SchematicraftButton.HEIGHT)
+                    .tooltip(Tooltip.create(SchematicraftButton.setupTooltip()))
+                    .build());
+            return;
         }
+
+        event.addListener(Button.builder(
+                SchematicraftButton.label(true),
+                b -> {
+                    var journey = ClientSetup.resolveHeldJourney(mc.player);
+                    mc.setScreen(new LibraryScreen(
+                            journey != null ? journey
+                                    : com.schematicraft.lib.client.gui.EditorJourney.browse()));
+                }
+        ).bounds(x, y, SchematicraftButton.WIDTH, SchematicraftButton.HEIGHT)
+                .tooltip(Tooltip.create(Component.literal(
+                        "Browse your cloud library.\n"
+                        + "Loads into the gadget you are holding.")))
+                .build());
     }
 }

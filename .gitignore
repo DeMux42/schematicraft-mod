@@ -23,3 +23,6 @@ run/
 runs/
 logs/
 repo/
+
+# Local build and runClient transcripts
+*.log

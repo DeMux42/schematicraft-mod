@@ -1,6 +1,6 @@
 package com.schematicraft.bg2addon.network;
 
-import com.schematicraft.SchematiCraftMod;
+import com.schematicraft.bg2addon.SchematiCraftBG2;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
@@ -19,7 +19,7 @@ public record LoadTemplatePayload(
 ) implements CustomPacketPayload {
 
     public static final Type<LoadTemplatePayload> TYPE = new Type<>(
-            ResourceLocation.fromNamespaceAndPath(SchematiCraftMod.MODID, "load_template")
+            ResourceLocation.fromNamespaceAndPath(SchematiCraftBG2.MODID, "load_template")
     );
 
     @Override
