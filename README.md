@@ -43,6 +43,8 @@ Browse, search, download, and upload schematics through the building tools you a
 - [Multiplayer](#multiplayer)
 - [Building From Source](#building-from-source)
 - [Versioning](#versioning)
+  - [Pre-release Stages](#pre-release-stages)
+  - [Tags](#tags)
 - [Roadmap](#roadmap)
 - [Contributing](#contributing)
 - [License](#license)
@@ -84,6 +86,8 @@ Both editors are optional. The mod detects what is installed and activates only 
 - At least one supported editor mod, for loading builds in game
 
 ### Installation
+
+This is an alpha. It works, but expect rough edges, and the config format may still change. See [Versioning](#versioning).
 
 1. Download the latest `schematicraft-1.21.1-<version>.jar` from the [releases page][releases-url].
 2. Drop it into your `mods` folder.
@@ -169,7 +173,7 @@ Building Gadgets 2 and Create resolve from CurseMaven as compile-time dependenci
 
 Jars are named `schematicraft-<mcversion>-<modversion>.jar`, so a build for one Minecraft version can never be mistaken for another in your mods folder.
 
-The mod version itself is plain semver, and since nothing compiles against a mod, the three numbers are a message to you rather than an API contract:
+The mod version is semver, and since nothing compiles against a mod, the three numbers are a message to you rather than an API contract:
 
 | Bump  | Means                                                                                |
 | ----- | ------------------------------------------------------------------------------------ |
@@ -177,7 +181,23 @@ The mod version itself is plain semver, and since nothing compiles against a mod
 | MINOR | New features, new editor integrations, new screens                                   |
 | MAJOR | You have to do something: reconfigure, re-enter your key, or a stored format changed |
 
-Releases are tagged `v<modversion>+mc<mcversion>`, for example `v0.4.0+mc1.21.1`. The suffix is semver build metadata, so version comparisons ignore it. That keeps a future 1.26 build from having to burn a version number just to be distinguishable, since the same feature set can ship as `v0.5.0+mc1.21.1` and `v0.5.0+mc1.26`.
+### Pre-release Stages
+
+Alpha and beta builds say so in the version string, not only in the download channel, so the marker survives being downloaded and renamed:
+
+| Version         | Means                                     |
+| --------------- | ----------------------------------------- |
+| `0.4.0-alpha.N` | Early. Expect breakage and rough edges.   |
+| `0.4.0-beta.N`  | Feature complete, still shaking out bugs. |
+| `0.4.0`         | Released.                                 |
+
+Semver sorts those in that order, so promoting a build is a rename with nothing to unwind.
+
+**The current build is an alpha.** Things will break, and the config format is not settled yet. If you hit something, the [issue tracker][issues-url] is the place. In-game feedback on a download is also useful, since that is what tells us a conversion path is wrong.
+
+### Tags
+
+Releases are tagged `v<modversion>+mc<mcversion>`, for example `v0.4.0-alpha.1+mc1.21.1`. The `+` portion is semver build metadata, which version comparisons ignore. That keeps a future 1.26 build from having to burn a version number just to be distinguishable, since the same feature set can ship as `v0.5.0+mc1.21.1` and `v0.5.0+mc1.26`.
 
 Still on 0.x. Reaching 1.0.0 is a commitment to hold the config and key storage formats still, which has not been earned yet.
 
