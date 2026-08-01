@@ -30,6 +30,11 @@ public class SchematiCraftMod {
         LOGGER.info("Schematicraft initializing");
         SchematiCraftLib.init();
 
+        // Identify this client to the API. Set on both sides, not just the client,
+        // so server-side requests are not left reporting the library's fallback.
+        com.schematicraft.lib.network.SchematiCraftAPIWrapper.get()
+                .setClientIdentifier("schematicraft/" + modVersion() + " (neoforge)");
+
         boolean hasBG2 = ModList.get().isLoaded("buildinggadgets2");
         boolean hasCreate = ModList.get().isLoaded("create");
 
@@ -89,9 +94,28 @@ public class SchematiCraftMod {
                 com.schematicraft.client.GlobalClientEvents::onKeyInput);
             NeoForge.EVENT_BUS.addListener(
                 com.schematicraft.client.GlobalClientEvents::onDisconnect);
-
-            com.schematicraft.lib.network.SchematiCraftAPIWrapper.get()
-                .setClientIdentifier("schematicraft/0.3.0 (neoforge)");
         }
+    }
+
+    /**
+     * Mod version as reported by the loader.
+     *
+     * Read from the loaded mod metadata rather than hardcoded, so it cannot drift
+     * from the jar the user actually installed. The version lives in one place,
+     * mod_version in gradle.properties, which the mods.toml template consumes.
+     */
+    private static String modVersion() {
+        String version = ModList.get().getModContainerById(MODID)
+                .map(container -> container.getModInfo().getVersion().toString())
+                .orElse(null);
+
+        if (version == null) {
+            // Should not happen: the container exists by the time this constructor
+            // runs. Log rather than fail, but do not report a made-up version.
+            LOGGER.warn("Could not read own mod version from the loader. "
+                    + "Requests will identify as an unknown version.");
+            return "unknown";
+        }
+        return version;
     }
 }

@@ -18,6 +18,7 @@ Your [schematicraft.com](https://schematicraft.com) schematic library, inside Mi
 
 Browse, search, download, and upload schematics through the building tools you already use.
 
+[![Release][release-shield]][releases-url]
 [![License][license-shield]][license-url]
 [![Minecraft][mc-shield]][mc-url]
 [![NeoForge][neoforge-shield]][neoforge-url]
@@ -41,6 +42,7 @@ Browse, search, download, and upload schematics through the building tools you a
   - [Block Palettes](#block-palettes)
 - [Multiplayer](#multiplayer)
 - [Building From Source](#building-from-source)
+- [Versioning](#versioning)
 - [Roadmap](#roadmap)
 - [Contributing](#contributing)
 - [License](#license)
@@ -83,7 +85,7 @@ Both editors are optional. The mod detects what is installed and activates only 
 
 ### Installation
 
-1. Download the latest `schematicraft-<version>.jar` from the [releases page][releases-url].
+1. Download the latest `schematicraft-1.21.1-<version>.jar` from the [releases page][releases-url].
 2. Drop it into your `mods` folder.
 3. Launch Minecraft and press <kbd>N</kbd>.
 4. Paste your API key from [schematicraft.com/account](https://schematicraft.com/account) and choose Validate.
@@ -151,7 +153,7 @@ cd schematicraft-mod
 ./gradlew build
 ```
 
-Requires JDK 21. The jar lands in `build/libs`.
+Requires JDK 21. The jar lands in `build/libs` as `schematicraft-1.21.1-<version>.jar`.
 
 The two source directories are `../schematicraft-lib/src/main/java` and `../../api-clients/java/src`. Neither is version pinned, so keep all three repositories on matching branches.
 
@@ -162,6 +164,22 @@ Building Gadgets 2 and Create resolve from CurseMaven as compile-time dependenci
 ./gradlew runClient -PwithCreate=false
 ./gradlew runClient -PwithBG2=false -PwithCreate=false
 ```
+
+## Versioning
+
+Jars are named `schematicraft-<mcversion>-<modversion>.jar`, so a build for one Minecraft version can never be mistaken for another in your mods folder.
+
+The mod version itself is plain semver, and since nothing compiles against a mod, the three numbers are a message to you rather than an API contract:
+
+| Bump  | Means                                                                                |
+| ----- | ------------------------------------------------------------------------------------ |
+| PATCH | Fixes only, drop it in                                                               |
+| MINOR | New features, new editor integrations, new screens                                   |
+| MAJOR | You have to do something: reconfigure, re-enter your key, or a stored format changed |
+
+Releases are tagged `v<modversion>+mc<mcversion>`, for example `v0.4.0+mc1.21.1`. The suffix is semver build metadata, so version comparisons ignore it. That keeps a future 1.26 build from having to burn a version number just to be distinguishable, since the same feature set can ship as `v0.5.0+mc1.21.1` and `v0.5.0+mc1.26`.
+
+Still on 0.x. Reaching 1.0.0 is a commitment to hold the config and key storage formats still, which has not been earned yet.
 
 ## Roadmap
 
@@ -200,6 +218,7 @@ Distributed under the GNU Lesser General Public License v3.0. See [`LICENSE`](LI
 
 <p align="right"><a href="#readme-top">Back to top</a></p>
 
+[release-shield]: https://img.shields.io/github/v/release/DeMux42/schematicraft-mod?sort=semver
 [license-shield]: https://img.shields.io/badge/license-LGPL--3.0-blue.svg
 [license-url]: LICENSE
 [mc-shield]: https://img.shields.io/badge/Minecraft-1.21.1-brightgreen.svg

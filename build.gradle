@@ -25,7 +25,11 @@ repositories {
 }
 
 base {
-    archivesName = mod_id
+    // The Minecraft version belongs in the filename, not in mod_version. Users pick
+    // jars by filename, so a 1.21.1 build and a future 1.26 build must not be
+    // indistinguishable in a mods folder. Produces:
+    //   schematicraft-1.21.1-0.4.0.jar
+    archivesName = "${mod_id}-${minecraft_version}"
 }
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
