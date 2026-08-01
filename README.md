@@ -128,7 +128,24 @@ Installing it on the server as well unlocks loading directly into a held Buildin
 
 ## Building From Source
 
+This repository does not build on its own. `build.gradle` pulls two sibling repositories in as source directories, at fixed relative paths, so the checkout layout matters.
+
+```
+workspace/
+  api-clients/              clone of schematicraft-api, folder must be named api-clients
+  mods/
+    schematicraft-mod/      this repository
+    schematicraft-lib/      shared editor-agnostic library
+```
+
+The `mods` level can be named anything, but it has to exist, because the API client is resolved two levels up.
+
 ```sh
+mkdir -p workspace/mods
+cd workspace
+git clone https://github.com/DeMux42/schematicraft-api.git api-clients
+cd mods
+git clone https://github.com/DeMux42/schematicraft-lib.git
 git clone https://github.com/DeMux42/schematicraft-mod.git
 cd schematicraft-mod
 ./gradlew build
@@ -136,13 +153,7 @@ cd schematicraft-mod
 
 Requires JDK 21. The jar lands in `build/libs`.
 
-The build expects the shared library beside this repository:
-
-```sh
-git clone https://github.com/DeMux42/schematicraft-lib.git
-```
-
-`build.gradle` adds `../schematicraft-lib/src/main/java` as a source directory, so both repositories must be checked out at matching branches.
+The two source directories are `../schematicraft-lib/src/main/java` and `../../api-clients/java/src`. Neither is version pinned, so keep all three repositories on matching branches.
 
 Building Gadgets 2 and Create resolve from CurseMaven as compile-time dependencies. To verify behavior when an editor is missing:
 
