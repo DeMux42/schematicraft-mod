@@ -6,6 +6,7 @@ import com.schematicraft.lib.client.gui.LibraryScreen;
 import com.schematicraft.lib.client.gui.SchematicraftButton;
 import com.schematicraft.lib.client.screen.ApiKeyScreen;
 import com.schematicraft.lib.config.ModConfig;
+import com.schematicraft.client.ModKeyBindings;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
@@ -32,14 +33,8 @@ import java.util.List;
 public class SchematicTableIntegration {
     private static final Logger LOGGER = LogUtils.getLogger();
 
-    /**
-     * Reserved height for Create's centered Schematic Table window.
-     *
-     * Create's window is shorter than a standard container panel. This is a
-     * conservative reserve so the button clears it even at high GUI scales,
-     * without reading Create internals that ship without their catnip dependency.
-     */
-    private static final int TABLE_PANEL_HEIGHT = 140;
+    /** Clearance between the table's window and the button. */
+    private static final int WINDOW_GAP = 4;
 
     /**
      * Filename to preselect when Create exposes it in the Schematic Table.
@@ -59,31 +54,53 @@ public class SchematicTableIntegration {
 
         applyPendingSelection(screen);
 
-        // Standard placement, matching every other editor screen.
         int btnX = SchematicraftButton.centeredX(screen.width);
-        int btnY = SchematicraftButton.standardY(screen.height, TABLE_PANEL_HEIGHT);
-
-        if (!ModConfig.hasApiKey()) {
-            event.addListener(Button.builder(
-                    SchematicraftButton.label(false),
-                    b -> Minecraft.getInstance().setScreen(new ApiKeyScreen(screen))
-            ).bounds(btnX, btnY, SchematicraftButton.WIDTH, SchematicraftButton.HEIGHT)
-                    .tooltip(Tooltip.create(SchematicraftButton.setupTooltip()))
-                    .build());
-            return;
-        }
-
+        int btnY = buttonY(screen);
+        boolean configured = ModConfig.hasApiKey();
         event.addListener(Button.builder(
-                SchematicraftButton.label(true),
-                b -> Minecraft.getInstance().setScreen(new LibraryScreen(
-                        CreateClientSetup.tableJourney(
-                                screen, selectedSchematicFile(screen))))
+                SchematicraftButton.label(configured),
+                b -> open(screen)
         ).bounds(btnX, btnY, SchematicraftButton.WIDTH, SchematicraftButton.HEIGHT)
-                .tooltip(Tooltip.create(Component.literal(
-                        "Browse your cloud library.\n"
-                        + "Downloads are written to Create's schematics folder "
-                        + "and selected here automatically.")))
+                .tooltip(Tooltip.create(configured
+                        ? Component.literal(
+                                "Browse your cloud library.\n"
+                                + "Downloads are written to Create's schematics folder "
+                                + "and selected here automatically.")
+                        : SchematicraftButton.setupTooltip()))
                 .build());
+    }
+
+    /**
+     * Below the table's own window, else above it, else as low as the screen
+     * allows. Create sizes and offsets the window in its init(), which has run
+     * by now, so its bounds are the window as drawn at this GUI scale. A fixed
+     * reserve sat inside the window at high scales.
+     */
+    private static int buttonY(SchematicTableScreen screen) {
+        int below = screen.getGuiTop() + screen.getYSize() + WINDOW_GAP;
+        if (below + SchematicraftButton.HEIGHT <= screen.height) return below;
+        int above = screen.getGuiTop() - WINDOW_GAP - SchematicraftButton.HEIGHT;
+        if (above >= 0) return above;
+        return Math.max(0, screen.height - SchematicraftButton.HEIGHT);
+    }
+
+    /** What the button does: the library, or setup without a key. */
+    private static void open(SchematicTableScreen screen) {
+        Minecraft.getInstance().setScreen(ModConfig.hasApiKey()
+                ? new LibraryScreen(CreateClientSetup.tableJourney(
+                        screen, selectedSchematicFile(screen)))
+                : new ApiKeyScreen(screen));
+    }
+
+    /**
+     * The library key (N by default) does what the button does on the table,
+     * since a screen takes key presses before the key mapping sees them.
+     */
+    public static void onKeyPressed(ScreenEvent.KeyPressed.Pre event) {
+        if (!(event.getScreen() instanceof SchematicTableScreen screen)) return;
+        if (!ModKeyBindings.OPEN_SCHEMATICRAFT.matches(event.getKeyCode(), event.getScanCode())) return;
+        open(screen);
+        event.setCanceled(true);
     }
 
     /** Selected local filename at the moment the Schematicraft button is used. */
