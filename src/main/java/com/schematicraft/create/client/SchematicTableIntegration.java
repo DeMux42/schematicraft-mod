@@ -74,7 +74,7 @@ public class SchematicTableIntegration {
      * Below the table's own window, else above it, else as low as the screen
      * allows. Create sizes and offsets the window in its init(), which has run
      * by now, so its bounds are the window as drawn at this GUI scale. A fixed
-     * reserve sat inside the window at high scales (owner, 2026-10-09).
+     * reserve sat inside the window at high scales.
      */
     private static int buttonY(SchematicTableScreen screen) {
         int below = screen.getGuiTop() + screen.getYSize() + WINDOW_GAP;
