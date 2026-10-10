@@ -83,6 +83,8 @@ public class SchematiCraftMod {
                 com.schematicraft.create.client.CreateClientSetup::onClientSetup);
             NeoForge.EVENT_BUS.addListener(
                 com.schematicraft.create.client.SchematicTableIntegration::onScreenInit);
+            NeoForge.EVENT_BUS.addListener(
+                com.schematicraft.create.client.SchematicTableIntegration::onKeyPressed);
         }
 
         if (FMLEnvironment.dist.isClient()) {
