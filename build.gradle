@@ -60,6 +60,15 @@ neoForge {
             sourceSet(sourceSets.main)
         }
     }
+
+    // Put Minecraft on the test classpath and wire the NeoForge JUnit
+    // extension, so the fixture drift test can bootstrap the registries and
+    // load the fixture into a vanilla StructureTemplate. This boots no world,
+    // no server, and no client: it is a plain JUnit run.
+    unitTest {
+        enable()
+        testedMod = mods."${mod_id}"
+    }
 }
 
 sourceSets.main.resources { srcDir 'src/generated/resources' }
@@ -140,6 +149,12 @@ dependencies {
 
     // Gson is bundled with MC, declared for clarity
     compileOnly 'com.google.code.gson:gson:2.10.1'
+
+    // The fixture drift test (TestFixtureDriftTest). JUnit 5; Minecraft is put
+    // on the test classpath by the neoForge { unitTest { ... } } block above.
+    testImplementation platform('org.junit:junit-bom:5.11.3')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
 var generateModMetadata = tasks.register("generateModMetadata", ProcessResources) {
@@ -188,5 +203,47 @@ idea {
     module {
         downloadSources = true
         downloadJavadoc = true
+    }
+}
+
+// Run the fixture drift test on the JUnit 5 platform.
+//
+// Regeneration reuses this same (fully FML-wired) test task: when the Gradle
+// property -PregenerateTestFixture is present, the task is pointed at the drift
+// test alone with the regeneration system property, so it writes the committed
+// fixture instead of asserting. The property is read through providers so the
+// configuration cache tracks it as an input and never bakes regeneration mode
+// into an ordinary `./gradlew test` run. SharedConstants (which supplies the
+// DataVersion) only initialises inside this FML runtime, which is why
+// regeneration reuses the test task rather than a bare JavaExec or a
+// hand-rolled Test task that would miss the moddev JVM wiring.
+def regenProp = providers.gradleProperty('regenerateTestFixture')
+def fixturePath = layout.projectDirectory
+        .file('src/test/resources/fixtures/schematicraft_test_platform.nbt')
+        .asFile.absolutePath
+tasks.named('test', Test) {
+    useJUnitPlatform()
+    if (regenProp.present) {
+        systemProperty 'schematicraft.regenerateFixture', fixturePath
+        filter { includeTestsMatching 'com.schematicraft.fixtures.TestFixtureDriftTest' }
+        outputs.upToDateWhen { false }
+    }
+}
+
+// Regenerate the committed fixture from code. The fixture is never hand
+// authored: this is the only sanctioned way to (re)write it, and the drift
+// test fails until the committed file matches what the generator produces.
+//   ./gradlew regenerateTestFixture -PregenerateTestFixture
+tasks.register('regenerateTestFixture') {
+    description = 'Regenerate src/test/resources/fixtures/schematicraft_test_platform.nbt from code. Pass -PregenerateTestFixture.'
+    group = 'build'
+    dependsOn tasks.named('test')
+    def requested = regenProp.present
+    doLast {
+        if (!requested) {
+            throw new GradleException(
+                    'Run with -PregenerateTestFixture so the test task writes the fixture: '
+                    + './gradlew regenerateTestFixture -PregenerateTestFixture')
+        }
     }
 }
