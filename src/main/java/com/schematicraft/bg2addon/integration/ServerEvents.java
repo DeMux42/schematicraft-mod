@@ -41,7 +41,7 @@ public class ServerEvents {
         ClipboardTracker.forgetPlayer(playerId);
         ServerOperationLimits.forget(playerId);
 
-        var server = player.getServer();
+        var server = player.level().getServer();
         if (server != null) {
             ServerClipboardRegistry.forgetPlayer(playerId, server.overworld());
         }

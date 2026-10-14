@@ -97,6 +97,16 @@ configurations {
 def withBG2 = Boolean.parseBoolean((findProperty('withBG2') ?: 'true').toString())
 def withCreate = Boolean.parseBoolean((findProperty('withCreate') ?: 'false').toString())
 
+// The Create integration glue references Create types directly, so it can only
+// be compiled when Create is on the compile classpath. With withCreate=false
+// (the 26.1 default, since Create has no 26.1 build) the Create coordinate is
+// not resolved, so the Create glue source is excluded from compilation too.
+// This is "compile the editor glue out when the editor is absent"; the BG2 glue
+// is always compiled because BG2 has a 26.1 build and is always on the classpath.
+if (!withCreate) {
+    sourceSets.main.java.exclude 'com/schematicraft/create/**'
+}
+
 dependencies {
     // Building Gadgets 2, Minecraft 26.1 build (CurseMaven project 298187,
     // file 7964119 = v1.4.6; neoforge.mods.toml: minecraft [26.1,26.2),

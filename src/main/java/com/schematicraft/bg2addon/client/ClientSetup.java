@@ -26,7 +26,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.TagParser;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
@@ -268,13 +268,13 @@ public final class ClientSetup {
                     .getAsJsonObject();
             if (!root.has("statePosArrayList")) return dropped;
 
-            CompoundTag nbt = TagParser.parseTag(
+            CompoundTag nbt = TagParser.parseCompoundFully(
                     root.get("statePosArrayList").getAsString());
-            ListTag blockstateMap = nbt.getList("blockstatemap", 10);
+            ListTag blockstateMap = nbt.getList("blockstatemap").orElse(new ListTag());
             for (int i = 0; i < blockstateMap.size(); i++) {
-                String name = blockstateMap.getCompound(i).getString("Name");
+                String name = blockstateMap.getCompoundOrEmpty(i).getStringOr("Name", "");
                 if (name.equals("minecraft:air")) continue;
-                ResourceLocation id = ResourceLocation.tryParse(name);
+                Identifier id = Identifier.tryParse(name);
                 if (id == null || !BuiltInRegistries.BLOCK.containsKey(id)) {
                     dropped.add(name);
                 }

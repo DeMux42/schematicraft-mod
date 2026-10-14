@@ -1,31 +1,41 @@
 package com.schematicraft.bg2addon.client;
 
-import com.direwolf20.buildinggadgets2.client.renderer.OurRenderTypes;
-import com.direwolf20.buildinggadgets2.client.renderer.VBORenderer;
-import com.direwolf20.buildinggadgets2.common.items.BaseGadget;
 import com.direwolf20.buildinggadgets2.util.datatypes.StatePos;
-import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.vertex.PoseStack;
-import com.mojang.blaze3d.vertex.VertexBuffer;
 import com.schematicraft.bg2addon.SchematiCraftBG2;
 import com.schematicraft.bg2addon.core.ClipboardEntry;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.renderer.RenderType;
-import net.minecraft.core.BlockPos;
-import net.minecraft.world.item.ItemStack;
-import org.joml.Matrix4f;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 import java.util.ArrayList;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
 
 /**
- * Renders a 3D rotating preview of clipboard entries using BG2's VBORenderer.
- * Singleton. Maintains its own client-side cache of StatePos data received
- * from the server via SyncClipboardDataPayload.
+ * Renders a 3D rotating preview of clipboard entries. Singleton. Maintains its
+ * own client-side cache of StatePos data received from the server via
+ * SyncClipboardDataPayload.
+ *
+ * <p><b>NeoForge 26.1 port status.</b> On 1.21.1 {@link #prepareForEntry} baked
+ * BG2's {@code VBORenderer.generateRender} output into
+ * {@code com.mojang.blaze3d.vertex.VertexBuffer}s and {@link #render} drew them
+ * with the immediate-mode pipeline ({@code RenderSystem.viewport} /
+ * {@code applyModelViewMatrix} / {@code VertexBuffer.drawWithShader} /
+ * {@code getShader}, a 3D {@code PoseStack} from {@code GuiGraphics.pose()},
+ * {@code GL11.glClear}). 26.1 removed all of that: {@code VertexBuffer} is gone,
+ * those {@code RenderSystem} methods are gone, and {@code pose()} is a 2D matrix
+ * stack. This mirrors the library's {@code SchematicPreviewRenderer} (piece 3a):
+ * drawing an arbitrary block mesh in a GUI in 26.1 needs the new render-pipeline
+ * / picture-in-picture render-state system, which is a design rewrite that only
+ * a running client can validate, and the fleet host is headless.
+ *
+ * <p>So this port keeps the whole public API and all the non-GPU state (the
+ * client StatePos cache, its bounding, {@code prepareForEntry} bounds
+ * computation and prepared-uuid bookkeeping), and the GPU build and draw are a
+ * guarded no-op: {@link #render} draws nothing. The clipboard preview panel is
+ * blank on 26.1 until the draw path is reimplemented on the 26.1 pipeline and
+ * checked in a dev client; everything else in the BG2 integration (loading into
+ * a gadget, clipboard capture and upload) is unaffected. Deferred to a follow-up,
+ * called out in piece note 565-neo-p3b.md.
  */
 public class ClipboardPreviewRenderer {
 
@@ -42,14 +52,11 @@ public class ClipboardPreviewRenderer {
     private final java.util.Deque<UUID> cacheOrder = new java.util.ArrayDeque<>();
 
     private UUID preparedUuid = null;
-    private Map<RenderType, VertexBuffer> vertexBuffers = null;
 
-    private float rotationAngle = 0f;
-
-    /** Midpoint of the current build for centering */
+    /** Midpoint of the current build for centering (kept for the follow-up 3D path). */
     private float midX, midY, midZ;
 
-    /** Max extent for camera distance calculation */
+    /** Max extent for camera distance calculation (kept for the follow-up 3D path). */
     private float maxExtent;
 
     private ClipboardPreviewRenderer() {}
@@ -86,7 +93,11 @@ public class ClipboardPreviewRenderer {
     }
 
     /**
-     * Build VBOs for rendering a clipboard entry's 3D preview.
+     * Record which clipboard entry is prepared and compute its bounds.
+     *
+     * <p>The 26.1 GPU VBO build is deferred (see the class note), so this keeps
+     * the bounds/prepared-uuid bookkeeping that the eventual 26.1 draw path needs
+     * but does not build any GPU buffers.
      */
     public void prepareForEntry(ClipboardEntry entry) {
         if (entry == null) {
@@ -104,17 +115,6 @@ public class ClipboardPreviewRenderer {
         }
 
         try {
-            Minecraft mc = Minecraft.getInstance();
-            // Try player's hand first, fall back to any CopyPaste gadget in inventory
-            ItemStack gadgetStack = BaseGadget.getGadget(mc.player);
-            if (gadgetStack.isEmpty()) {
-                // In Template Manager mode, the gadget is in the container slot, not in hand.
-                // VBORenderer needs a non-empty gadget stack but only uses it for isExchanging check.
-                // Create a dummy CopyPaste gadget stack.
-                gadgetStack = new ItemStack(com.direwolf20.buildinggadgets2.setup.Registration.CopyPaste_Gadget.get());
-            }
-            if (gadgetStack.isEmpty()) return;
-
             // Calculate bounding box for centering
             int minX = Integer.MAX_VALUE, minY = Integer.MAX_VALUE, minZ = Integer.MAX_VALUE;
             int maxX = Integer.MIN_VALUE, maxY = Integer.MIN_VALUE, maxZ = Integer.MIN_VALUE;
@@ -131,12 +131,7 @@ public class ClipboardPreviewRenderer {
             midZ = (minZ + maxZ) / 2f;
             maxExtent = Math.max(Math.max(maxX - minX, maxY - minY), maxZ - minZ) + 1;
 
-            var vertexBuffers = RenderType.chunkBufferLayers().stream()
-                    .collect(Collectors.toMap(
-                            rt -> rt, rt -> new VertexBuffer(
-                                    VertexBuffer.Usage.STATIC)));
-            VBORenderer.generateRender(mc.level, BlockPos.ZERO, gadgetStack, 1f, data, vertexBuffers);
-            this.vertexBuffers = vertexBuffers;
+            // GPU mesh build deferred on 26.1; see class note.
             preparedUuid = uuid;
 
         } catch (Exception e) {
@@ -145,70 +140,12 @@ public class ClipboardPreviewRenderer {
         }
     }
 
-    public void render(GuiGraphics guiGraphics, int x, int y, int w, int h) {
-        if (preparedUuid == null || vertexBuffers == null) return;
-
-        Minecraft mc = Minecraft.getInstance();
-
-        try {
-            rotationAngle += 0.5f;
-            if (rotationAngle >= 360f) rotationAngle -= 360f;
-
-            double scale = mc.getWindow().getGuiScale();
-            int vpX = (int) Math.round(x * scale);
-            int vpY = (int) Math.round(mc.getWindow().getHeight() - (y + h) * scale);
-            int vpW = (int) Math.round(w * scale);
-            int vpH = (int) Math.round(h * scale);
-
-            RenderSystem.viewport(vpX, vpY, vpW, vpH);
-            RenderSystem.backupProjectionMatrix();
-
-            Matrix4f proj = new Matrix4f();
-            proj.setPerspective((float) Math.toRadians(60), (float) w / h, 0.1f, 1000f);
-            RenderSystem.setProjectionMatrix(proj, com.mojang.blaze3d.vertex.VertexSorting.ORTHOGRAPHIC_Z);
-
-            PoseStack ps = guiGraphics.pose();
-            ps.pushPose();
-            ps.setIdentity();
-
-            float zoom = -maxExtent * 2.0f;
-            ps.translate(0, 0, zoom);
-            ps.mulPose(createRotation(20f, rotationAngle, 0f));
-            ps.translate(-midX, -midY, -midZ);
-
-            RenderSystem.applyModelViewMatrix();
-            org.lwjgl.opengl.GL11.glClear(org.lwjgl.opengl.GL11.GL_DEPTH_BUFFER_BIT);
-
-            RenderSystem.runAsFancy(() -> {
-                try {
-                    for (RenderType rt : new RenderType[]{RenderType.solid(), RenderType.cutout(), RenderType.cutoutMipped(), RenderType.translucent()}) {
-                        RenderType drawType = rt.equals(RenderType.cutout()) ? OurRenderTypes.RenderBlock : RenderType.translucent();
-                        VertexBuffer vb = vertexBuffers.get(rt);
-                        if (vb == null || vb.getFormat() == null) continue;
-                        drawType.setupRenderState();
-                        vb.bind();
-                        vb.drawWithShader(ps.last().pose(), RenderSystem.getProjectionMatrix(), RenderSystem.getShader());
-                        VertexBuffer.unbind();
-                        drawType.clearRenderState();
-                    }
-                } catch (Exception ignored) {}
-            });
-
-            ps.popPose();
-            RenderSystem.applyModelViewMatrix();
-            RenderSystem.viewport(0, 0, mc.getWindow().getWidth(), mc.getWindow().getHeight());
-            RenderSystem.restoreProjectionMatrix();
-
-        } catch (Exception e) {
-            RenderSystem.viewport(0, 0, mc.getWindow().getWidth(), mc.getWindow().getHeight());
-            RenderSystem.restoreProjectionMatrix();
-        }
-    }
-
-    private static org.joml.Quaternionf createRotation(float xDeg, float yDeg, float zDeg) {
-        return new org.joml.Quaternionf()
-                .rotateX((float) Math.toRadians(xDeg))
-                .rotateY((float) Math.toRadians(yDeg))
-                .rotateZ((float) Math.toRadians(zDeg));
+    /**
+     * Render the 3D clipboard preview.
+     * No-op on 26.1 until the GPU draw path is reimplemented (see class note).
+     */
+    public void render(GuiGraphicsExtractor guiGraphics, int x, int y, int w, int h) {
+        if (preparedUuid == null) return;
+        // 26.1 3D draw deferred; see class note.
     }
 }

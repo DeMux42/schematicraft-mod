@@ -56,7 +56,7 @@ public class SchematiCraftMod {
             NeoForge.EVENT_BUS.addListener(
                 com.schematicraft.bg2addon.integration.ServerEvents::onPlayerLoggedOut);
 
-            if (FMLEnvironment.dist.isClient()) {
+            if (FMLEnvironment.getDist().isClient()) {
                 modEventBus.addListener(
                     com.schematicraft.bg2addon.client.ClientSetup::onClientSetup);
 
@@ -75,19 +75,21 @@ public class SchematiCraftMod {
             }
         }
 
-        // Create: purely client-side. Downloads are written to Create's
-        // schematics folder, so no server component and no packets are needed.
-        if (hasCreate && FMLEnvironment.dist.isClient()) {
-            LOGGER.info("Create detected, activating Create integration");
-            modEventBus.addListener(
-                com.schematicraft.create.client.CreateClientSetup::onClientSetup);
-            NeoForge.EVENT_BUS.addListener(
-                com.schematicraft.create.client.SchematicTableIntegration::onScreenInit);
-            NeoForge.EVENT_BUS.addListener(
-                com.schematicraft.create.client.SchematicTableIntegration::onKeyPressed);
+        // Create: no Minecraft 26.1 build exists, so the Create glue is compiled
+        // out of this jar (build.gradle excludes com/schematicraft/create/** when
+        // withCreate=false, the 26.1 default) and its runtime wiring is removed
+        // here. hasCreate is therefore always false on 26.1. When a 26.1 Create
+        // ships, flip withCreate's default to true and restore the Create event
+        // registration block (CreateClientSetup::onClientSetup and
+        // SchematicTableIntegration::onScreenInit/onKeyPressed), which is what the
+        // 1.21.1 build registers. See piece note 565-neo-p3b.md.
+        if (hasCreate) {
+            LOGGER.warn("Create reported present, but the 26.1 build ships no Create "
+                    + "integration; ignoring. Rebuild with -PwithCreate once a 26.1 "
+                    + "Create exists.");
         }
 
-        if (FMLEnvironment.dist.isClient()) {
+        if (FMLEnvironment.getDist().isClient()) {
             // Shared controls and browsing work even when only a future editor
             // integration is installed.
             modEventBus.addListener(

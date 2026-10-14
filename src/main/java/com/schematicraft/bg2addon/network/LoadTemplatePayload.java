@@ -6,7 +6,7 @@ import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 
 /**
  * Client-to-server packet that sends BG2 template NBT data to be loaded
@@ -19,7 +19,7 @@ public record LoadTemplatePayload(
 ) implements CustomPacketPayload {
 
     public static final Type<LoadTemplatePayload> TYPE = new Type<>(
-            ResourceLocation.fromNamespaceAndPath(SchematiCraftBG2.MODID, "load_template")
+            Identifier.fromNamespaceAndPath(SchematiCraftBG2.MODID, "load_template")
     );
 
     @Override

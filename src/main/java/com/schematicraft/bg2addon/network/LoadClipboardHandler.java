@@ -31,31 +31,31 @@ public class LoadClipboardHandler {
             ItemStack gadgetStack = BaseGadget.getGadget(player);
 
             if (gadgetStack.isEmpty()) {
-                player.displayClientMessage(
-                        Component.literal("\u00a7cNo gadget found. Hold a Copy/Paste gadget."), true);
+                player.sendSystemMessage(
+                        Component.literal("\u00a7cNo gadget found. Hold a Copy/Paste gadget."));
                 return;
             }
 
             if (!(gadgetStack.getItem() instanceof GadgetCopyPaste)
                     && !(gadgetStack.getItem() instanceof GadgetCutPaste)) {
-                player.displayClientMessage(
-                        Component.literal("\u00a7cHold a Copy/Paste gadget to load from clipboard."), true);
+                player.sendSystemMessage(
+                        Component.literal("\u00a7cHold a Copy/Paste gadget to load from clipboard."));
                 return;
             }
 
             // This packet carries an arbitrary source UUID and can be sent by a
             // modified client, so rate limit before touching world data.
             if (!ServerOperationLimits.allowOperation(player.getUUID())) {
-                player.displayClientMessage(
-                        Component.literal("\u00a7cToo many clipboard loads. Wait a moment."), true);
+                player.sendSystemMessage(
+                        Component.literal("\u00a7cToo many clipboard loads. Wait a moment."));
                 return;
             }
 
             // A UUID is an identifier, not an authorization. Only the player who
             // created the snapshot may load it.
             if (!ServerClipboardRegistry.isOwner(player.getUUID(), payload.sourceGadgetUuid())) {
-                player.displayClientMessage(
-                        Component.literal("\u00a7cClipboard entry not found."), true);
+                player.sendSystemMessage(
+                        Component.literal("\u00a7cClipboard entry not found."));
                 SchematiCraftBG2.LOGGER.warn("Refused clipboard load for a snapshot not owned by player {}",
                         player.getName().getString());
                 return;
@@ -69,16 +69,16 @@ public class LoadClipboardHandler {
                 ArrayList<StatePos> list = bg2Data.getCopyPasteList(payload.sourceGadgetUuid(), false);
 
                 if (list == null || list.isEmpty()) {
-                    player.displayClientMessage(
-                            Component.literal("\u00a7cClipboard entry not found or empty."), true);
+                    player.sendSystemMessage(
+                            Component.literal("\u00a7cClipboard entry not found or empty."));
                     return;
                 }
 
                 // Bound the copy before it is persisted under a new UUID.
                 if (list.size() > ServerOperationLimits.MAX_BLOCKS) {
-                    player.displayClientMessage(
+                    player.sendSystemMessage(
                             Component.literal("\u00a7cClipboard entry exceeds the "
-                                    + ServerOperationLimits.MAX_BLOCKS + " block limit."), true);
+                                    + ServerOperationLimits.MAX_BLOCKS + " block limit."));
                     return;
                 }
 
@@ -95,9 +95,8 @@ public class LoadClipboardHandler {
                         .findFirst()
                         .ifPresent(pasteMode -> GadgetNBT.setMode(gadgetStack, pasteMode));
 
-                player.displayClientMessage(
-                        Component.literal("\u00a7aLoaded from clipboard (" + list.size() + " blocks). Ready to paste."),
-                        true);
+                player.sendSystemMessage(
+                        Component.literal("\u00a7aLoaded from clipboard (" + list.size() + " blocks). Ready to paste."));
 
                 SchematiCraftBG2.LOGGER.info("Loaded clipboard entry {} ({} blocks) for player {}",
                         payload.sourceGadgetUuid().toString().substring(0, 8),
@@ -106,8 +105,8 @@ public class LoadClipboardHandler {
             } catch (Exception e) {
                 SchematiCraftBG2.LOGGER.error("Failed to load clipboard entry: {}", e.getMessage(), e);
                 // Keep server-side detail in the log, not in the player message.
-                player.displayClientMessage(
-                        Component.literal("\u00a7cFailed to load from clipboard."), true);
+                player.sendSystemMessage(
+                        Component.literal("\u00a7cFailed to load from clipboard."));
             }
         });
     }
