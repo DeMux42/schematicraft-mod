@@ -1,6 +1,6 @@
 package com.schematicraft.client;
 
-import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
+import net.minecraftforge.client.event.RegisterKeyMappingsEvent;
 
 /** Registers controls that are not owned by any one editor. */
 public final class ClientSetup {
