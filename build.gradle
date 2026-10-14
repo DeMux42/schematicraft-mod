@@ -76,32 +76,52 @@ configurations {
     runtimeClasspath.extendsFrom localRuntime
 }
 
-// Both editors are optional at runtime. Their types are referenced directly by
-// the integration code, so they are always needed on the compile classpath, but
-// each can be left off the runtime classpath to verify that the mod degrades
-// correctly when that editor is not installed:
+// Editors are optional. Their types are referenced directly by the integration
+// code, so an editor that is on the build is needed on the compile classpath,
+// and each can also be left off the runtime classpath to verify that the mod
+// degrades correctly when that editor is not installed:
 //
 //   gradlew runClient -PwithBG2=false
 //   gradlew runClient -PwithCreate=false
 //   gradlew runClient -PwithBG2=false -PwithCreate=false
 //
-// Both default to true, so a normal dev run is unchanged.
+// withBG2 defaults to true: Building Gadgets 2 has a Minecraft 26.1 build
+// (v1.4.6, CurseMaven file 7964119), so it is on the 26.1 jar.
+//
+// withCreate defaults to FALSE on 26.1: Create has no Minecraft 26.1 build.
+// Its newest release is 6.0.10 for 1.21.1 (project 328085). Until a 26.1 Create
+// ships, Create is left out of the 26.1 jar: its coordinate is not resolved and
+// its runtime classpath entry is off. When a 26.1 Create build exists, pin its
+// file id below and flip this default back to true. This is the equivalent of
+// the per-editor "leave it out" switch for an editor with no build for 26.1.
 def withBG2 = Boolean.parseBoolean((findProperty('withBG2') ?: 'true').toString())
-def withCreate = Boolean.parseBoolean((findProperty('withCreate') ?: 'true').toString())
+def withCreate = Boolean.parseBoolean((findProperty('withCreate') ?: 'false').toString())
 
 dependencies {
-    // Building Gadgets 2 (CurseMaven project 298187, file 6850515 = v1.3.9 for 1.21.1)
-    compileOnly "curse.maven:building-gadgets-298187:6850515"
+    // Building Gadgets 2, Minecraft 26.1 build (CurseMaven project 298187,
+    // file 7964119 = v1.4.6; neoforge.mods.toml: minecraft [26.1,26.2),
+    // neoforge [26.1.2.21-beta,); licence MIT). The BG2 glue references BG2
+    // types directly, so BG2 stays on the compile classpath unconditionally;
+    // only its runtime entry is gated by withBG2, which is how the runtime
+    // "editor not installed" degradation is tested.
+    compileOnly "curse.maven:building-gadgets-298187:7964119"
 
-    // Curios API - required by BG2 at runtime (project 309927, file 6529130 = v9.5.1+1.21.1)
-    compileOnly "curse.maven:curios-309927:6529130"
+    // BG2 v1.4.6 drops the Curios dependency the 1.21.1 line (v1.3.9) carried,
+    // and the mod never references Curios types itself, so Curios is no longer
+    // on the 26.1 build. (1.21.1 pinned curios-309927:6529130 for BG2.)
 
-    // Create mod (CurseMaven project 328085, file 7178775 = v6.0.8 for 1.21.1)
-    compileOnly "curse.maven:create-328085:7178775"
+    // Create has no Minecraft 26.1 build (newest is 6.0.10 for 1.21.1, project
+    // 328085). It is therefore left off the 26.1 jar via withCreate=false
+    // above: neither its compile coordinate nor its runtime entry is added, so
+    // dependency resolution does not try to fetch a nonexistent 26.1 file.
+    // When a 26.1 Create build exists, pin its CurseMaven file id here and flip
+    // withCreate's default back to true.
+    if (withCreate) {
+        compileOnly "curse.maven:create-328085:7178775"
+    }
 
     if (withBG2) {
-        localRuntime "curse.maven:building-gadgets-298187:6850515"
-        localRuntime "curse.maven:curios-309927:6529130"
+        localRuntime "curse.maven:building-gadgets-298187:7964119"
     }
 
     if (withCreate) {
