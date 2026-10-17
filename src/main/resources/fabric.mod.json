@@ -11,10 +11,14 @@
   },
   "license": "${mod_license}",
   "icon": "logo.png",
-  "environment": "*",
+  "environment": "client",
   "entrypoints": {
-    "main": [],
-    "client": []
+    "main": [
+      "com.schematicraft.fabric.SchematicraftFabric"
+    ],
+    "client": [
+      "com.schematicraft.fabric.SchematicraftFabricClient"
+    ]
   },
   "depends": {
     "fabricloader": ">=0.16",

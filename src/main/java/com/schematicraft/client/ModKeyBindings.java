@@ -1,21 +1,21 @@
 package com.schematicraft.client;
 
-import com.mojang.blaze3d.platform.InputConstants;
-import com.schematicraft.SchematiCraftMod;
-import net.minecraft.client.KeyMapping;
+import com.schematicraft.SchematiCraftRef;
+import net.minecraft.client.option.KeyBinding;
+import net.minecraft.client.util.InputUtil;
 import org.lwjgl.glfw.GLFW;
 
 /** Shared controls available regardless of which editor is installed. */
 public final class ModKeyBindings {
-    private static final String CATEGORY = "key." + SchematiCraftMod.MODID + ".category";
+    private static final String CATEGORY = "key." + SchematiCraftRef.MODID + ".category";
 
-    public static final KeyMapping OPEN_SCHEMATICRAFT = new KeyMapping(
-            "key." + SchematiCraftMod.MODID + ".open_schematicraft",
-            InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_N, CATEGORY);
+    public static final KeyBinding OPEN_SCHEMATICRAFT = new KeyBinding(
+            "key." + SchematiCraftRef.MODID + ".open_schematicraft",
+            InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_N, CATEGORY);
 
-    public static final KeyMapping OPEN_API_KEY_SCREEN = new KeyMapping(
-            "key." + SchematiCraftMod.MODID + ".open_api_key",
-            InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_UNKNOWN, CATEGORY);
+    public static final KeyBinding OPEN_API_KEY_SCREEN = new KeyBinding(
+            "key." + SchematiCraftRef.MODID + ".open_api_key",
+            InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_UNKNOWN, CATEGORY);
 
     private ModKeyBindings() {}
 }

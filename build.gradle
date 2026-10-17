@@ -83,6 +83,26 @@ loom {
 // camera). Kept as a source include exactly as on the NeoForge build so there is
 // one copy of the library code. For release builds this would become a jarJar/
 // include dependency instead.
+// Exclude the loader-specific source that has no Fabric counterpart, rather than
+// deleting it from the shared tree (master and neoforge/* still build it). These
+// are left out of the Fabric source set with a reason:
+//  - SchematiCraftMod.java: the NeoForge @Mod entry point. Fabric uses
+//    com.schematicraft.fabric.SchematicraftFabric / SchematicraftFabricClient.
+//  - bg2addon/**: the Building Gadgets 2 integration (client, server and
+//    networking). BG2 is a NeoForge-ecosystem mod with no Fabric 1.21.1 build, so
+//    none of it compiles or runs on Fabric; the Fabric editor is Litematica.
+//  - create/**: the Create integration. Create has no Fabric 1.21.1 build
+//    (confirmed: no create or create-fabric 1.21.1 Fabric file on Modrinth), so
+//    its glue has nothing to compile against on Fabric.
+// The Fabric mod is therefore client-only with no server or networking half.
+sourceSets.main.java.exclude 'com/schematicraft/SchematiCraftMod.java'
+// client/ClientSetup.java registers keybinds via the NeoForge RegisterKeyMappingsEvent;
+// on Fabric that is done in SchematicraftFabricClient via KeyBindingHelper, so the
+// NeoForge-shaped file is excluded here (kept in the shared tree for master/neoforge).
+sourceSets.main.java.exclude 'com/schematicraft/client/ClientSetup.java'
+sourceSets.main.java.exclude 'com/schematicraft/bg2addon/**'
+sourceSets.main.java.exclude 'com/schematicraft/create/**'
+
 sourceSets.main.java.srcDir '../schematicraft-lib/src/main/java'
 
 // Official Schematicraft API client (shared across all integrations; zero
@@ -120,6 +140,10 @@ dependencies {
 
 processResources {
     inputs.property "version", project.version
+    // The NeoForge access transformer is not used on Fabric (fabric.mod.json does
+    // not reference it). Keep the file in the shared tree for master/neoforge, but
+    // do not ship it in the Fabric jar.
+    exclude 'META-INF/accesstransformer.cfg'
     def replaceProperties = [
             version                : mod_version,
             minecraft_version      : minecraft_version,
