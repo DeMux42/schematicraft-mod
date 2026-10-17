@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "id": "${mod_id}",
+  "version": "${version}",
+  "name": "${mod_name}",
+  "description": "${mod_description}",
+  "authors": ["${mod_authors}"],
+  "contact": {
+    "homepage": "${mod_display_url}",
+    "issues": "${mod_issue_tracker_url}"
+  },
+  "license": "${mod_license}",
+  "icon": "logo.png",
+  "environment": "client",
+  "entrypoints": {
+    "main": [
+      "com.schematicraft.fabric.SchematicraftFabric"
+    ],
+    "client": [
+      "com.schematicraft.fabric.SchematicraftFabricClient"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.16",
+    "minecraft": "1.21.1",
+    "java": ">=21",
+    "fabric-api": "*"
+  },
+  "suggests": {
+    "litematica": "*"
+  }
+}

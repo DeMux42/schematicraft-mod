@@ -1,132 +1,165 @@
 plugins {
+    id 'fabric-loom' version '1.14.10'
     id 'java-library'
     id 'maven-publish'
-    id 'net.neoforged.moddev' version '2.0.141'
     id 'idea'
 }
 
 version = mod_version
 group = mod_group_id
 
-repositories {
-    // mavenLocal() is intentionally absent. It takes precedence over remote
-    // repositories, so a stale or poisoned artifact in the local cache would
-    // silently enter the build. Add it temporarily and locally if you need to
-    // test an unpublished dependency.
-    mavenCentral()
-    maven { url = "https://maven.createmod.net" }
-    maven { url = "https://maven.ithundxr.dev/snapshots" }
-    maven { url = "https://maven.blamejared.com" }
-    maven { url = "https://maven.theillusivec4.top/" }
-    exclusiveContent {
-        forRepository { maven { url "https://cursemaven.com" } }
-        filter { includeGroup "curse.maven" }
-    }
+base {
+    // The loader AND the Minecraft version belong in the filename. The NeoForge
+    // 1.21.1 release from master is schematicraft-1.21.1-<version>.jar; this Fabric
+    // build targets the same Minecraft version, so without the loader in the name
+    // the two jars would be indistinguishable on a release page and in a mods
+    // folder. Produces schematicraft-fabric-1.21.1-0.4.0-alpha.2.jar.
+    archivesName = "${mod_id}-fabric-${minecraft_version}"
 }
 
-base {
-    // The Minecraft version belongs in the filename, not in mod_version. Users pick
-    // jars by filename, so a 1.21.1 build and a future 1.26 build must not be
-    // indistinguishable in a mods folder. Produces:
-    //   schematicraft-1.21.1-0.4.0.jar
-    archivesName = "${mod_id}-${minecraft_version}"
+repositories {
+    // mavenLocal() is intentionally absent, as on the NeoForge build: it takes
+    // precedence over remote repositories, so a stale or poisoned artifact in the
+    // local cache would silently enter the build.
+    mavenCentral()
 }
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
-neoForge {
-    version = project.neo_version
+// Litematica (editor, LGPL-3.0-only) and malilib (its library, LGPL-3.0-only).
+//
+// Pinned exact files verified by their SHA-512, fetched from Modrinth's CDN,
+// never vendored, never in CI, never in the shipped jar. This is the same
+// owner-approved pattern (2026-10-04) the engine's Litematica conformance
+// harness uses (engine/conformance/litematica-1.21.1/build.gradle), applied here
+// because Loom remaps mod dependencies at configuration time and the editor is a
+// compile-only, runtime-optional integration whose supply chain must be pinned.
+//
+// The file handoff writes a .litematic into Litematica's schematics directory,
+// exactly as the NeoForge Create glue writes a .nbt into Create's folder; the mod
+// neither bundles nor statically links Litematica.
+def pinnedEditors = [
+    [
+        file: 'litematica-fabric-1.21-0.19.61.jar',
+        url: 'https://cdn.modrinth.com/data/bEpr0Arc/versions/o7i8oi1Z/litematica-fabric-1.21-0.19.61.jar',
+        sha512: '626d0b9785afa5cd9915a25089213332b0ae6805e992a15c12292fa174146a354c7fa891e5f834e2eb10c281dbd4b4d69081649b2a83b48f22a66bc99220b328',
+    ],
+    [
+        file: 'malilib-fabric-1.21-0.21.10.jar',
+        url: 'https://cdn.modrinth.com/data/GcWjdA9I/versions/C99LEy6r/malilib-fabric-1.21-0.21.10.jar',
+        sha512: '9f70b4605ea23f8c8b519622a6cbdcac6c8934c70bab3b8ea2d5da071a37e71ff74406d2e154c5ba4ebc7772d76e97ae94f5760e71632bd8a11d23ae8ae9a111',
+    ],
+]
 
-    parchment {
-        mappingsVersion = project.parchment_mappings_version
-        minecraftVersion = project.parchment_minecraft_version
+// Loom remaps mod dependencies while the project is configured, so the files are
+// fetched and checked here, before the dependencies block names them. libs/ is
+// gitignored.
+def libs = file('libs')
+libs.mkdirs()
+def sha512 = { File f -> java.security.MessageDigest.getInstance('SHA-512').digest(f.bytes).encodeHex().toString() }
+pinnedEditors.each { p ->
+    def f = new File(libs, p.file)
+    if (!f.exists() || sha512(f) != p.sha512) {
+        logger.lifecycle("fetching ${p.file}")
+        new URL(p.url).withInputStream { i -> f.withOutputStream { o -> o << i } }
     }
+    if (sha512(f) != p.sha512) {
+        f.delete()
+        throw new GradleException("${p.file}: the downloaded file does not have the pinned SHA-512")
+    }
+}
 
+loom {
     runs {
         client {
             client()
-            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
         }
-
         server {
             server()
-            programArgument '--nogui'
-            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
-        }
-
-        configureEach {
-            systemProperty 'forge.logging.markers', 'REGISTRIES'
-            logLevel = org.slf4j.event.Level.DEBUG
-        }
-    }
-
-    mods {
-        "${mod_id}" {
-            sourceSet(sourceSets.main)
         }
     }
 }
 
-sourceSets.main.resources { srcDir 'src/generated/resources' }
+// Shared, editor-agnostic Schematicraft library (browse/search/download/preview/
+// camera). Kept as a source include exactly as on the NeoForge build so there is
+// one copy of the library code. For release builds this would become a jarJar/
+// include dependency instead.
+// Exclude the loader-specific source that has no Fabric counterpart, rather than
+// deleting it from the shared tree (master and neoforge/* still build it). These
+// are left out of the Fabric source set with a reason:
+//  - SchematiCraftMod.java: the NeoForge @Mod entry point. Fabric uses
+//    com.schematicraft.fabric.SchematicraftFabric / SchematicraftFabricClient.
+//  - bg2addon/**: the Building Gadgets 2 integration (client, server and
+//    networking). BG2 is a NeoForge-ecosystem mod with no Fabric 1.21.1 build, so
+//    none of it compiles or runs on Fabric; the Fabric editor is Litematica.
+//  - create/**: the Create integration. Create has no Fabric 1.21.1 build
+//    (confirmed: no create or create-fabric 1.21.1 Fabric file on Modrinth), so
+//    its glue has nothing to compile against on Fabric.
+// The Fabric mod is therefore client-only with no server or networking half.
+sourceSets.main.java.exclude 'com/schematicraft/SchematiCraftMod.java'
+// client/ClientSetup.java registers keybinds via the NeoForge RegisterKeyMappingsEvent;
+// on Fabric that is done in SchematicraftFabricClient via KeyBindingHelper, so the
+// NeoForge-shaped file is excluded here (kept in the shared tree for master/neoforge).
+sourceSets.main.java.exclude 'com/schematicraft/client/ClientSetup.java'
+sourceSets.main.java.exclude 'com/schematicraft/bg2addon/**'
+sourceSets.main.java.exclude 'com/schematicraft/create/**'
 
-// Shared, editor-agnostic Schematicraft library (browse/search/download/preview/camera).
-// Kept as a separate source module so Fabric and Forge editor mods can reuse it.
-// For release builds this would become a jarJar dependency instead.
 sourceSets.main.java.srcDir '../schematicraft-lib/src/main/java'
 
-// Official Schematicraft API client (shared across all integrations)
+// Official Schematicraft API client (shared across all integrations; zero
+// Minecraft dependencies).
 sourceSets.main.java.srcDir '../../api-clients/java/src'
 
-configurations {
-    runtimeClasspath.extendsFrom localRuntime
-}
-
-// Both editors are optional at runtime. Their types are referenced directly by
-// the integration code, so they are always needed on the compile classpath, but
-// each can be left off the runtime classpath to verify that the mod degrades
-// correctly when that editor is not installed:
+// Litematica is optional at runtime. Its types are referenced directly by the
+// integration code, so it is always needed on the compile classpath, but it can
+// be left off the runtime classpath to verify the mod degrades correctly when the
+// editor is not installed:
 //
-//   gradlew runClient -PwithBG2=false
-//   gradlew runClient -PwithCreate=false
-//   gradlew runClient -PwithBG2=false -PwithCreate=false
+//   gradlew runClient -PwithLitematica=false
 //
-// Both default to true, so a normal dev run is unchanged.
-def withBG2 = Boolean.parseBoolean((findProperty('withBG2') ?: 'true').toString())
-def withCreate = Boolean.parseBoolean((findProperty('withCreate') ?: 'true').toString())
+// Defaults to true, so a normal dev run is unchanged.
+def withLitematica = Boolean.parseBoolean((findProperty('withLitematica') ?: 'true').toString())
 
 dependencies {
-    // Building Gadgets 2 (CurseMaven project 298187, file 6850515 = v1.3.9 for 1.21.1)
-    compileOnly "curse.maven:building-gadgets-298187:6850515"
+    // Fabric toolchain. Pinned exactly; see gradle.properties for the sources.
+    minecraft "com.mojang:minecraft:${minecraft_version}"
+    mappings "net.fabricmc:yarn:${yarn_mappings}:v2"
+    modImplementation "net.fabricmc:fabric-loader:${loader_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${fabric_version}"
 
-    // Curios API - required by BG2 at runtime (project 309927, file 6529130 = v9.5.1+1.21.1)
-    compileOnly "curse.maven:curios-309927:6529130"
+    // Editor on the COMPILE classpath only (never bundled). malilib needs these
+    // Fabric API modules to resolve, matching the conformance harness.
+    pinnedEditors.each { p -> modCompileOnly files("libs/${p.file}") }
 
-    // Create mod (CurseMaven project 328085, file 7178775 = v6.0.8 for 1.21.1)
-    compileOnly "curse.maven:create-328085:7178775"
-
-    if (withBG2) {
-        localRuntime "curse.maven:building-gadgets-298187:6850515"
-        localRuntime "curse.maven:curios-309927:6529130"
+    if (withLitematica) {
+        pinnedEditors.each { p -> modLocalRuntime files("libs/${p.file}") }
     }
 
-    if (withCreate) {
-        localRuntime "curse.maven:create-328085:7178775"
-    }
-
-    // Gson is bundled with MC, declared for clarity
+    // Gson is bundled with Minecraft at runtime; declared for clarity.
     compileOnly 'com.google.code.gson:gson:2.10.1'
+
+    // Fixture drift test runs on fabric-loader-junit, which boots the loader and
+    // lets the vanilla registries bootstrap headlessly (the same harness the
+    // engine's Litematica conformance uses). Test-only; not shipped.
+    testImplementation "net.fabricmc:fabric-loader-junit:${loader_version}"
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.11.4'
 }
 
-var generateModMetadata = tasks.register("generateModMetadata", ProcessResources) {
-    var replaceProperties = [
+processResources {
+    inputs.property "version", project.version
+    // The NeoForge access transformer is not used on Fabric (fabric.mod.json does
+    // not reference it). Keep the file in the shared tree for master/neoforge, but
+    // do not ship it in the Fabric jar.
+    exclude 'META-INF/accesstransformer.cfg'
+    def replaceProperties = [
+            version                : mod_version,
             minecraft_version      : minecraft_version,
-            minecraft_version_range: minecraft_version_range,
-            neo_version            : neo_version,
-            loader_version_range   : loader_version_range,
+            loader_version         : loader_version,
+            fabric_version         : fabric_version,
             mod_id                 : mod_id,
             mod_name               : mod_name,
             mod_license            : mod_license,
-            mod_version            : mod_version,
             mod_authors            : mod_authors,
             mod_description        : mod_description,
             mod_display_url        : mod_display_url,
@@ -134,13 +167,71 @@ var generateModMetadata = tasks.register("generateModMetadata", ProcessResources
             mod_credits            : mod_credits
     ]
     inputs.properties replaceProperties
-    expand replaceProperties
-    from "src/main/templates"
-    into "build/generated/sources/modMetadata"
+    filesMatching("fabric.mod.json") {
+        expand replaceProperties
+    }
 }
 
-sourceSets.main.resources.srcDir generateModMetadata
-neoForge.ideSyncTask generateModMetadata
+tasks.withType(JavaCompile).configureEach {
+    it.options.encoding = 'UTF-8'
+    it.options.release = 21
+}
+
+java {
+    withSourcesJar()
+}
+
+// Fail the build if the shippable jar ever holds editor classes or a nested jar.
+// Litematica and malilib are compile-only (F13: never bundled); BG2 and Create
+// are excluded from the Fabric source set. This asserts the jar actually honours
+// that. Reads the remapped (shippable) jar; forbidden package roots are the real
+// editor roots (fi/dy/masa for Litematica and malilib, the BG2 and Create groups),
+// NOT the mod's own com/schematicraft/litematica glue package.
+tasks.register('verifyNoBundledEditors') {
+    dependsOn 'remapJar'
+    doLast {
+        def jar = tasks.remapJar.archiveFile.get().asFile
+        def forbidden = [
+            'fi/dy/masa/',                     // Litematica + malilib (masa)
+            'com/direwolf20/buildinggadgets2/',// Building Gadgets 2
+            'com/simibubi/create/',            // Create
+            'com/schematicraft/bg2addon/',     // excluded BG2 glue
+            'com/schematicraft/create/',       // excluded Create glue
+        ]
+        def hits = []
+        def nested = []
+        new java.util.zip.ZipFile(jar).withCloseable { zf ->
+            zf.entries().each { e ->
+                def n = e.name
+                if (n.endsWith('.jar')) nested << n
+                forbidden.each { f -> if (n.startsWith(f)) hits << n }
+            }
+        }
+        if (!hits.isEmpty() || !nested.isEmpty()) {
+            throw new GradleException("Jar ${jar.name} must ship no editor classes and no nested jars, but found: "
+                + "editor=${hits.take(10)} nested=${nested}")
+        }
+        logger.lifecycle("verifyNoBundledEditors: ${jar.name} is clean (no editor classes, no nested jars)")
+    }
+}
+tasks.named('check') { dependsOn 'verifyNoBundledEditors' }
+
+// The fixture drift test (TestFixtureDriftTest) runs on the JUnit platform. The
+// regenerate path is gradlew test -PregenerateTestFixture, read through providers
+// so the configuration cache tracks it as an input and never bakes regeneration
+// into an ordinary gradlew test. The test runs from the project dir so the
+// committed fixture's src/main/resources path resolves.
+def regenFixture = providers.gradleProperty('regenerateTestFixture').isPresent()
+tasks.named('test', Test) {
+    useJUnitPlatform()
+    workingDir = project.projectDir
+    systemProperty 'regenerateTestFixture', regenFixture.toString()
+    outputs.upToDateWhen { false }
+}
+tasks.register('regenerateTestFixture') {
+    dependsOn 'test'
+    doLast { logger.lifecycle('Fixture regenerated from TestFixtureGenerator.') }
+}
 
 publishing {
     publications {
@@ -153,10 +244,6 @@ publishing {
             url "file://${project.projectDir}/repo"
         }
     }
-}
-
-tasks.withType(JavaCompile).configureEach {
-    options.encoding = 'UTF-8'
 }
 
 idea {
