@@ -26,3 +26,6 @@ repo/
 
 # Local build and runClient transcripts
 *.log
+
+# Pinned editor jars (Litematica, malilib) fetched at build time, never committed.
+libs/
