@@ -16,7 +16,7 @@ import net.minecraft.nbt.TagParser;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
-import net.neoforged.neoforge.network.PacketDistributor;
+import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 import org.slf4j.Logger;
 
 import javax.annotation.Nullable;
@@ -70,7 +70,7 @@ public class BG2GadgetHelper {
      * above this cannot reach the server no matter which path we pick.
      *
      * We check before sending because the send itself cannot fail loudly:
-     * PacketDistributor.sendToServer never throws, the server throws while
+     * ClientPacketDistributor.sendToServer never throws, the server throws while
      * decoding, and the client would otherwise report a success that never
      * happened.
      *
@@ -132,10 +132,10 @@ public class BG2GadgetHelper {
             if (destination == Destination.TEMPLATE) {
                 // BG2's own packet. Its handler targets the open Template Manager's
                 // slot 1 and turns paper into a Template item.
-                PacketDistributor.sendToServer(new SendPastePayload(UUID.randomUUID(), nbtData));
+                ClientPacketDistributor.sendToServer(new SendPastePayload(UUID.randomUUID(), nbtData));
                 LOGGER.info("Sent template to the Template Manager slot ({} bytes NBT)", size);
             } else {
-                PacketDistributor.sendToServer(new LoadTemplatePayload(nbtData));
+                ClientPacketDistributor.sendToServer(new LoadTemplatePayload(nbtData));
                 LOGGER.info("Sent template to the held gadget ({} bytes NBT)", size);
             }
             return null;
@@ -212,7 +212,7 @@ public class BG2GadgetHelper {
 
             CompoundTag nbtData;
             if (root.has("statePosArrayList")) {
-                nbtData = TagParser.parseTag(root.get("statePosArrayList").getAsString());
+                nbtData = TagParser.parseCompoundFully(root.get("statePosArrayList").getAsString());
             } else {
                 LOGGER.warn("Unsupported template format");
                 return null;

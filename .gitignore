@@ -24,5 +24,10 @@ runs/
 logs/
 repo/
 
+# NeoForge unit-test (moddev) FML runtime output, written when `gradlew test`
+# runs the fixture drift test under the FML runtime.
+.cache/
+config/
+
 # Local build and runClient transcripts
 *.log

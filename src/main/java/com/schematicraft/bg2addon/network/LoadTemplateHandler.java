@@ -37,8 +37,8 @@ public class LoadTemplateHandler {
                     }
                 }
                 if (foundGadget.isEmpty()) {
-                    player.displayClientMessage(
-                            Component.literal("\u00a7cNo gadget found. Hold a Copy/Paste gadget."), true);
+                    player.sendSystemMessage(
+                            Component.literal("\u00a7cNo gadget found. Hold a Copy/Paste gadget."));
                     return;
                 }
             }
@@ -47,23 +47,23 @@ public class LoadTemplateHandler {
 
             if (!(gadgetStack.getItem() instanceof GadgetCopyPaste)
                     && !(gadgetStack.getItem() instanceof GadgetCutPaste)) {
-                player.displayClientMessage(
-                        Component.literal("\u00a7cHold a Copy/Paste gadget to load templates."), true);
+                player.sendSystemMessage(
+                        Component.literal("\u00a7cHold a Copy/Paste gadget to load templates."));
                 return;
             }
 
             // A modified client can send this packet directly, so rate limit
             // before doing any parsing work.
             if (!ServerOperationLimits.allowOperation(player.getUUID())) {
-                player.displayClientMessage(
-                        Component.literal("\u00a7cToo many template loads. Wait a moment."), true);
+                player.sendSystemMessage(
+                        Component.literal("\u00a7cToo many template loads. Wait a moment."));
                 return;
             }
 
             // Bound the payload before decoding it into a state list.
             if (!ServerOperationLimits.isWithinSizeLimit(payload.templateData())) {
-                player.displayClientMessage(
-                        Component.literal("\u00a7cTemplate is too large to load."), true);
+                player.sendSystemMessage(
+                        Component.literal("\u00a7cTemplate is too large to load."));
                 SchematiCraftBG2.LOGGER.warn("Rejected oversized template from player {}",
                         player.getName().getString());
                 return;
@@ -73,16 +73,16 @@ public class LoadTemplateHandler {
                 ArrayList<StatePos> buildList = BG2Data.statePosListFromNBTMapArray(payload.templateData());
 
                 if (buildList.isEmpty()) {
-                    player.displayClientMessage(
-                            Component.literal("\u00a7cTemplate is empty or invalid."), true);
+                    player.sendSystemMessage(
+                            Component.literal("\u00a7cTemplate is empty or invalid."));
                     return;
                 }
 
                 // Reject before writing to persistent BG2 world data.
                 if (buildList.size() > ServerOperationLimits.MAX_BLOCKS) {
-                    player.displayClientMessage(
+                    player.sendSystemMessage(
                             Component.literal("\u00a7cTemplate exceeds the "
-                                    + ServerOperationLimits.MAX_BLOCKS + " block limit."), true);
+                                    + ServerOperationLimits.MAX_BLOCKS + " block limit."));
                     SchematiCraftBG2.LOGGER.warn("Rejected template with {} blocks from player {}",
                             buildList.size(), player.getName().getString());
                     return;
@@ -103,9 +103,8 @@ public class LoadTemplateHandler {
                         .findFirst()
                         .ifPresent(pasteMode -> GadgetNBT.setMode(gadgetStack, pasteMode));
 
-                player.displayClientMessage(
-                        Component.literal("\u00a7aTemplate loaded (" + buildList.size() + " blocks). Ready to paste."),
-                        true);
+                player.sendSystemMessage(
+                        Component.literal("\u00a7aTemplate loaded (" + buildList.size() + " blocks). Ready to paste."));
 
                 SchematiCraftBG2.LOGGER.info("Loaded template with {} blocks for player {}",
                         buildList.size(), player.getName().getString());
@@ -113,8 +112,8 @@ public class LoadTemplateHandler {
             } catch (Exception e) {
                 SchematiCraftBG2.LOGGER.error("Failed to load template: {}", e.getMessage(), e);
                 // Keep server-side detail in the log, not in the player message.
-                player.displayClientMessage(
-                        Component.literal("\u00a7cFailed to load template."), true);
+                player.sendSystemMessage(
+                        Component.literal("\u00a7cFailed to load template."));
             }
         });
     }
