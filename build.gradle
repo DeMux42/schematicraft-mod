@@ -9,11 +9,12 @@ version = mod_version
 group = mod_group_id
 
 base {
-    // The Minecraft version belongs in the filename, not in mod_version, so a
-    // 1.21.1 Fabric build and a 1.21.1 NeoForge build are never indistinguishable
-    // in a mods folder. Produces schematicraft-1.21.1-0.4.0-alpha.2.jar, matching
-    // the NeoForge convention.
-    archivesName = "${mod_id}-${minecraft_version}"
+    // The loader AND the Minecraft version belong in the filename. The NeoForge
+    // 1.21.1 release from master is schematicraft-1.21.1-<version>.jar; this Fabric
+    // build targets the same Minecraft version, so without the loader in the name
+    // the two jars would be indistinguishable on a release page and in a mods
+    // folder. Produces schematicraft-fabric-1.21.1-0.4.0-alpha.2.jar.
+    archivesName = "${mod_id}-fabric-${minecraft_version}"
 }
 
 repositories {
@@ -136,6 +137,13 @@ dependencies {
 
     // Gson is bundled with Minecraft at runtime; declared for clarity.
     compileOnly 'com.google.code.gson:gson:2.10.1'
+
+    // Fixture drift test runs on fabric-loader-junit, which boots the loader and
+    // lets the vanilla registries bootstrap headlessly (the same harness the
+    // engine's Litematica conformance uses). Test-only; not shipped.
+    testImplementation "net.fabricmc:fabric-loader-junit:${loader_version}"
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.11.4'
 }
 
 processResources {
@@ -171,6 +179,58 @@ tasks.withType(JavaCompile).configureEach {
 
 java {
     withSourcesJar()
+}
+
+// Fail the build if the shippable jar ever holds editor classes or a nested jar.
+// Litematica and malilib are compile-only (F13: never bundled); BG2 and Create
+// are excluded from the Fabric source set. This asserts the jar actually honours
+// that. Reads the remapped (shippable) jar; forbidden package roots are the real
+// editor roots (fi/dy/masa for Litematica and malilib, the BG2 and Create groups),
+// NOT the mod's own com/schematicraft/litematica glue package.
+tasks.register('verifyNoBundledEditors') {
+    dependsOn 'remapJar'
+    doLast {
+        def jar = tasks.remapJar.archiveFile.get().asFile
+        def forbidden = [
+            'fi/dy/masa/',                     // Litematica + malilib (masa)
+            'com/direwolf20/buildinggadgets2/',// Building Gadgets 2
+            'com/simibubi/create/',            // Create
+            'com/schematicraft/bg2addon/',     // excluded BG2 glue
+            'com/schematicraft/create/',       // excluded Create glue
+        ]
+        def hits = []
+        def nested = []
+        new java.util.zip.ZipFile(jar).withCloseable { zf ->
+            zf.entries().each { e ->
+                def n = e.name
+                if (n.endsWith('.jar')) nested << n
+                forbidden.each { f -> if (n.startsWith(f)) hits << n }
+            }
+        }
+        if (!hits.isEmpty() || !nested.isEmpty()) {
+            throw new GradleException("Jar ${jar.name} must ship no editor classes and no nested jars, but found: "
+                + "editor=${hits.take(10)} nested=${nested}")
+        }
+        logger.lifecycle("verifyNoBundledEditors: ${jar.name} is clean (no editor classes, no nested jars)")
+    }
+}
+tasks.named('check') { dependsOn 'verifyNoBundledEditors' }
+
+// The fixture drift test (TestFixtureDriftTest) runs on the JUnit platform. The
+// regenerate path is gradlew test -PregenerateTestFixture, read through providers
+// so the configuration cache tracks it as an input and never bakes regeneration
+// into an ordinary gradlew test. The test runs from the project dir so the
+// committed fixture's src/main/resources path resolves.
+def regenFixture = providers.gradleProperty('regenerateTestFixture').isPresent()
+tasks.named('test', Test) {
+    useJUnitPlatform()
+    workingDir = project.projectDir
+    systemProperty 'regenerateTestFixture', regenFixture.toString()
+    outputs.upToDateWhen { false }
+}
+tasks.register('regenerateTestFixture') {
+    dependsOn 'test'
+    doLast { logger.lifecycle('Fixture regenerated from TestFixtureGenerator.') }
 }
 
 publishing {

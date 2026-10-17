@@ -42,7 +42,10 @@ public final class SchematicraftFabricClient implements ClientModInitializer {
         KeyBindingHelper.registerKeyBinding(ModKeyBindings.OPEN_API_KEY_SCREEN);
 
         boolean hasLitematica = FabricLoader.getInstance().isModLoaded("litematica");
-        if (!hasLitematica) {
+        if (hasLitematica) {
+            SchematicraftFabric.LOGGER.info("Litematica detected, activating Litematica integration");
+            com.schematicraft.litematica.client.LitematicaClientSetup.register();
+        } else {
             SchematicraftFabric.LOGGER.warn("Litematica not found. Schematicraft will "
                     + "load and browse the cloud library, but has no editor to hand builds to.");
         }
