@@ -13,7 +13,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
-import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
+import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 import org.slf4j.Logger;
 
 import javax.annotation.Nullable;
@@ -128,7 +128,7 @@ public final class CreateClientSetup {
         @Override
         public ItemStack icon() {
             var item = BuiltInRegistries.ITEM.get(
-                    ResourceLocation.fromNamespaceAndPath("create", "schematic"));
+                    new ResourceLocation("create", "schematic"));
             return item == null ? ItemStack.EMPTY : new ItemStack(item);
         }
 
@@ -162,7 +162,7 @@ public final class CreateClientSetup {
                                 "Create selection changed. Reopen upload and try again."));
             }
             return SchematiCraftAPIWrapper.get().uploadFile(
-                    current, title, description, "1.21.1", "neoforge",
+                    current, title, description, "1.20.1", "forge",
                     bundleId, images);
         }
 

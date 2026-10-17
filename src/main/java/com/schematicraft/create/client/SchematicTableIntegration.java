@@ -12,7 +12,7 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.network.chat.Component;
-import net.neoforged.neoforge.client.event.ScreenEvent;
+import net.minecraftforge.client.event.ScreenEvent;
 import org.slf4j.Logger;
 
 import java.util.List;
@@ -24,8 +24,6 @@ import java.util.List;
  * Create's folder target, the selected local file as upload source, and this
  * table as the native return screen. Downloads write .nbt files directly to
  * Create's schematics folder and refresh its file list.
- *
- * This replaces the previous full side-panel injection approach.
  *
  * Registered manually from the mod entrypoint so this class is only loaded when
  * Create is installed.
@@ -183,9 +181,10 @@ public class SchematicTableIntegration {
      * Position of a filename in Create's available schematics list, or -1.
      *
      * Read reflectively rather than by calling CreateClient directly. Create ships
-     * through CurseMaven without its catnip dependency, so touching types whose
-     * supertypes live in catnip does not compile here. Reflection also means a
-     * Create internal rename degrades to skipping the preselect.
+     * through its maven without its catnip dependency on the compile classpath, so
+     * touching types whose supertypes live in catnip does not compile here.
+     * Reflection also means a Create internal rename degrades to skipping the
+     * preselect.
      */
     private static int indexOfSchematic(String fileName) throws Exception {
         Class<?> createClient = Class.forName("com.simibubi.create.CreateClient");

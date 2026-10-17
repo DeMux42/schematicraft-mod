@@ -5,8 +5,8 @@ import com.schematicraft.lib.client.gui.LibraryScreen;
 import com.schematicraft.lib.client.screen.ApiKeyScreen;
 import com.schematicraft.lib.config.ModConfig;
 import net.minecraft.client.Minecraft;
-import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
-import net.neoforged.neoforge.client.event.InputEvent;
+import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
+import net.minecraftforge.client.event.InputEvent;
 
 /** Global key handling shared by every editor integration. */
 public final class GlobalClientEvents {

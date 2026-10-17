@@ -1,68 +1,57 @@
 plugins {
     id 'java-library'
-    id 'maven-publish'
-    id 'net.neoforged.moddev' version '2.0.141'
+    id 'eclipse'
     id 'idea'
+    id 'maven-publish'
+    id 'net.minecraftforge.gradle' version '6.0.54'
+    id 'org.parchmentmc.librarian.forgegradle' version '1.2.0'
 }
 
 version = mod_version
 group = mod_group_id
 
-repositories {
-    // mavenLocal() is intentionally absent. It takes precedence over remote
-    // repositories, so a stale or poisoned artifact in the local cache would
-    // silently enter the build. Add it temporarily and locally if you need to
-    // test an unpublished dependency.
-    mavenCentral()
-    maven { url = "https://maven.createmod.net" }
-    maven { url = "https://maven.ithundxr.dev/snapshots" }
-    maven { url = "https://maven.blamejared.com" }
-    maven { url = "https://maven.theillusivec4.top/" }
-    exclusiveContent {
-        forRepository { maven { url "https://cursemaven.com" } }
-        filter { includeGroup "curse.maven" }
-    }
-}
-
 base {
     // The Minecraft version belongs in the filename, not in mod_version. Users pick
-    // jars by filename, so a 1.21.1 build and a future 1.26 build must not be
+    // jars by filename, so a 1.20.1 build and the 1.21.1 build must not be
     // indistinguishable in a mods folder. Produces:
-    //   schematicraft-1.21.1-0.4.0.jar
+    //   schematicraft-1.20.1-0.4.0-alpha.2.jar
     archivesName = "${mod_id}-${minecraft_version}"
 }
 
-java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+// Forge 1.20.1 runs on Java 17.
+java.toolchain.languageVersion = JavaLanguageVersion.of(17)
 
-neoForge {
-    version = project.neo_version
+minecraft {
+    mappings channel: 'parchment', version: "${parchment_mappings_version}-${parchment_minecraft_version}"
 
-    parchment {
-        mappingsVersion = project.parchment_mappings_version
-        minecraftVersion = project.parchment_minecraft_version
-    }
+    // Access transformer. Empty today (only comments), kept so a later entry has
+    // a home and the mods.toml accessTransformers block has a file to point at.
+    accessTransformer = file('src/main/resources/META-INF/accesstransformer.cfg')
 
     runs {
         client {
-            client()
-            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
+            workingDirectory project.file('run')
+            property 'forge.logging.markers', 'REGISTRIES'
+            property 'forge.logging.console.level', 'debug'
+            property 'forge.enabledGameTestNamespaces', mod_id
+            mods {
+                "${mod_id}" {
+                    source sourceSets.main
+                }
+            }
         }
 
         server {
-            server()
-            programArgument '--nogui'
-            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
-        }
-
-        configureEach {
-            systemProperty 'forge.logging.markers', 'REGISTRIES'
-            logLevel = org.slf4j.event.Level.DEBUG
-        }
-    }
-
-    mods {
-        "${mod_id}" {
-            sourceSet(sourceSets.main)
+            workingDirectory project.file('run')
+            property 'forge.logging.markers', 'REGISTRIES'
+            property 'forge.logging.console.level', 'debug'
+            property 'forge.enabledGameTestNamespaces', mod_id
+            args '--nogui'
+            mods {
+                "${mod_id}" {
+                    source sourceSets.main
+                }
+            }
         }
     }
 }
@@ -70,58 +59,62 @@ neoForge {
 sourceSets.main.resources { srcDir 'src/generated/resources' }
 
 // Shared, editor-agnostic Schematicraft library (browse/search/download/preview/camera).
-// Kept as a separate source module so Fabric and Forge editor mods can reuse it.
-// For release builds this would become a jarJar dependency instead.
+// Kept as a separate source module so Forge, NeoForge, and Fabric editor mods can
+// reuse it. Same source-include shape as the 1.21.1 build, pointed at the library's
+// Forge 1.20.1 branch so it compiles against 1.20.1 mappings.
 sourceSets.main.java.srcDir '../schematicraft-lib/src/main/java'
 
-// Official Schematicraft API client (shared across all integrations)
+// Official Schematicraft API client (shared across all integrations, zero MC deps).
 sourceSets.main.java.srcDir '../../api-clients/java/src'
 
-configurations {
-    runtimeClasspath.extendsFrom localRuntime
+repositories {
+    // mavenLocal() is intentionally absent. It takes precedence over remote
+    // repositories, so a stale or poisoned artifact in the local cache would
+    // silently enter the build. Add it temporarily and locally if you need to
+    // test an unpublished dependency.
+    mavenCentral()
+    maven { url = 'https://maven.createmod.net' }
+    maven { url = 'https://maven.ithundxr.dev/snapshots' }
+    maven { url = 'https://maven.blamejared.com' }
+    maven { url = 'https://maven.tterrag.com/' }
+    maven {
+        name = 'Jared maven'
+        url = 'https://maven.parchmentmc.org'
+    }
 }
 
-// Both editors are optional at runtime. Their types are referenced directly by
-// the integration code, so they are always needed on the compile classpath, but
-// each can be left off the runtime classpath to verify that the mod degrades
-// correctly when that editor is not installed:
+// Create is optional at runtime. Its types are referenced directly by the Create
+// integration code, so it is always on the compile classpath, but it can be left
+// off the runtime classpath to verify the mod degrades correctly when it is absent:
 //
-//   gradlew runClient -PwithBG2=false
 //   gradlew runClient -PwithCreate=false
-//   gradlew runClient -PwithBG2=false -PwithCreate=false
 //
-// Both default to true, so a normal dev run is unchanged.
-def withBG2 = Boolean.parseBoolean((findProperty('withBG2') ?: 'true').toString())
+// Defaults to true, so a normal dev run is unchanged.
 def withCreate = Boolean.parseBoolean((findProperty('withCreate') ?: 'true').toString())
 
 dependencies {
-    // Building Gadgets 2 (CurseMaven project 298187, file 6850515 = v1.3.9 for 1.21.1)
-    compileOnly "curse.maven:building-gadgets-298187:6850515"
+    minecraft "net.minecraftforge:forge:${forge_version}"
 
-    // Curios API - required by BG2 at runtime (project 309927, file 6529130 = v9.5.1+1.21.1)
-    compileOnly "curse.maven:curios-309927:6529130"
-
-    // Create mod (CurseMaven project 328085, file 7178775 = v6.0.8 for 1.21.1)
-    compileOnly "curse.maven:create-328085:7178775"
-
-    if (withBG2) {
-        localRuntime "curse.maven:building-gadgets-298187:6850515"
-        localRuntime "curse.maven:curios-309927:6529130"
-    }
+    // Create for Minecraft 1.20.1 (Forge), version 6.0.8 build 291.
+    // The '-all' classifier is the dev jar carrying Create's own classes. Pinned
+    // to an exact build; same Create 6 API line as the 1.21.1 build. MIT licensed.
+    compileOnly "com.simibubi.create:create-1.20.1:6.0.8-291:all"
 
     if (withCreate) {
-        localRuntime "curse.maven:create-328085:7178775"
+        runtimeOnly "com.simibubi.create:create-1.20.1:6.0.8-291:all"
     }
 
-    // Gson is bundled with MC, declared for clarity
+    // Gson is bundled with Minecraft, declared for clarity.
     compileOnly 'com.google.code.gson:gson:2.10.1'
 }
 
-var generateModMetadata = tasks.register("generateModMetadata", ProcessResources) {
+// mods.toml is templated so the version numbers live only in gradle.properties.
+tasks.named('processResources', ProcessResources).configure {
     var replaceProperties = [
             minecraft_version      : minecraft_version,
             minecraft_version_range: minecraft_version_range,
-            neo_version            : neo_version,
+            forge_version          : forge_version,
+            forge_version_range    : forge_version_range,
             loader_version_range   : loader_version_range,
             mod_id                 : mod_id,
             mod_name               : mod_name,
@@ -134,13 +127,27 @@ var generateModMetadata = tasks.register("generateModMetadata", ProcessResources
             mod_credits            : mod_credits
     ]
     inputs.properties replaceProperties
-    expand replaceProperties
-    from "src/main/templates"
-    into "build/generated/sources/modMetadata"
+    filesMatching(['META-INF/mods.toml', 'pack.mcmeta']) {
+        expand replaceProperties
+    }
 }
 
-sourceSets.main.resources.srcDir generateModMetadata
-neoForge.ideSyncTask generateModMetadata
+jar {
+    manifest {
+        attributes([
+                'Specification-Title'     : mod_id,
+                'Specification-Vendor'    : mod_authors,
+                'Specification-Version'   : '1',
+                'Implementation-Title'    : project.name,
+                'Implementation-Version'  : project.jar.archiveVersion,
+                'Implementation-Vendor'   : mod_authors
+        ])
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
 
 publishing {
     publications {
@@ -152,16 +159,5 @@ publishing {
         maven {
             url "file://${project.projectDir}/repo"
         }
-    }
-}
-
-tasks.withType(JavaCompile).configureEach {
-    options.encoding = 'UTF-8'
-}
-
-idea {
-    module {
-        downloadSources = true
-        downloadJavadoc = true
     }
 }
