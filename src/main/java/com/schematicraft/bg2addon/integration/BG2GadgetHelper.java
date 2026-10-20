@@ -176,7 +176,9 @@ public class BG2GadgetHelper {
 
         ItemStack slot = templateSlotContents(player);
         if (slot.isEmpty()) {
-            return "Put paper in the Template Manager's template slot first";
+            // #736: the owner's words (2026-10-20), shown on the library screen
+            // the player is looking at when the load is refused.
+            return "Put a piece of paper in the Template Manager, then load again.";
         }
         if (!slot.is(Items.PAPER) && !(slot.getItem() instanceof TemplateItem)) {
             // Redprints share the slot but BG2's paste path does not register their
